@@ -2,7 +2,30 @@ from . import pspnet
 from . import unet
 from . import segnet
 from . import fcn
+
+from keras_unet_collection._model_unet_2d import unet_2d
+from keras_unet_collection._model_vnet_2d import vnet_2d
+from keras_unet_collection._model_unet_plus_2d import unet_plus_2d
+from keras_unet_collection._model_r2_unet_2d import r2_unet_2d
+from keras_unet_collection._model_att_unet_2d import att_unet_2d
+from keras_unet_collection._model_resunet_a_2d import resunet_a_2d
+from keras_unet_collection._model_u2net_2d import u2net_2d
+from keras_unet_collection._model_unet_3plus_2d import unet_3plus_2d
+from keras_unet_collection._model_transunet_2d import transunet_2d
+from keras_unet_collection._model_swin_unet_2d import swin_unet_2d
+
 model_from_name = {}
+
+model_from_name["unet_collect"] = unet_2d
+model_from_name["vnet"] = vnet_2d
+model_from_name["unetplus"] = unet_plus_2d
+model_from_name["r2_unet"] = r2_unet_2d
+model_from_name["att_unet"] = att_unet_2d
+model_from_name["resunet_a"] = resunet_a_2d
+model_from_name["u2net"] = u2net_2d
+model_from_name["unet_3plus"] = unet_3plus_2d
+model_from_name["transunet"] = transunet_2d
+model_from_name["swin_unet"] = swin_unet_2d
 
 
 model_from_name["fcn_8"] = fcn.fcn_8
@@ -40,3 +63,6 @@ model_from_name["segnet"] = segnet.segnet
 model_from_name["vgg_segnet"] = segnet.vgg_segnet
 model_from_name["resnet50_segnet"] = segnet.resnet50_segnet
 model_from_name["mobilenet_segnet"] = segnet.mobilenet_segnet
+model_from_name["mobilenet_segnet_deep"] = segnet.mobilenet_segnet_deep
+
+

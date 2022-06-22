@@ -100,6 +100,13 @@ def _unet(n_classes, encoder, l1_skip_conn=True, input_height=416,
     o = (Conv2D(64, (3, 3), padding='valid', activation='relu', data_format=IMAGE_ORDERING, name="seg_feats"))(o)
     o = (BatchNormalization())(o)
 
+    #########################
+    o = (UpSampling2D((2, 2), data_format=IMAGE_ORDERING))(o)
+    o = (ZeroPadding2D((1, 1), data_format=IMAGE_ORDERING))(o)
+    o = (Conv2D(32, (3, 3), padding='valid', activation='relu', data_format=IMAGE_ORDERING, name="seg_feats_2"))(o)
+    o = (BatchNormalization())(o)
+    #########################
+
     o = Conv2D(n_classes, (3, 3), padding='same',
                data_format=IMAGE_ORDERING)(o)
 
@@ -108,7 +115,7 @@ def _unet(n_classes, encoder, l1_skip_conn=True, input_height=416,
     return model
 
 
-def unet(n_classes, input_height=416, input_width=608, encoder_level=3, channels=3):
+def unet(n_classes, input_height=416, input_width=608, encoder_level=2, channels=3):
 
     model = _unet(n_classes, vanilla_encoder,
                   input_height=input_height, input_width=input_width, channels=channels)
@@ -134,7 +141,7 @@ def resnet50_unet(n_classes, input_height=416, input_width=608,
 
 
 def mobilenet_unet(n_classes, input_height=224, input_width=224,
-                   encoder_level=3, channels=3):
+                   encoder_level=2, channels=3):
 
     model = _unet(n_classes, get_mobilenet_encoder,
                   input_height=input_height, input_width=input_width, channels=channels)
@@ -143,8 +150,10 @@ def mobilenet_unet(n_classes, input_height=224, input_width=224,
 
 
 if __name__ == '__main__':
-    m = unet_mini(101)
-    m = _unet(101, vanilla_encoder)
-    # m = _unet( 101 , get_mobilenet_encoder ,True , 224 , 224  )
-    m = _unet(101, get_vgg_encoder)
-    m = _unet(101, get_resnet50_encoder)
+    # m = unet_mini(101)
+    # m = _unet(101, vanilla_encoder)
+    m = _unet( 101 , get_mobilenet_encoder ,True , 224 , 224  )
+    # m = _unet(101, get_vgg_encoder)
+    # m = _unet(101, get_resnet50_encoder)
+    # from keras.utils import plot_model
+    # plot_model( m , show_shapes=True , to_file='model.png')

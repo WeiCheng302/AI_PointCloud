@@ -2,8 +2,9 @@ import glob
 import random
 import json
 import os
+from grpc import Channel
 import six
-
+import tifffile
 import cv2
 import numpy as np
 from tqdm import tqdm
@@ -22,15 +23,16 @@ def model_from_checkpoint_path(checkpoints_path):
 
     from .models.all_models import model_from_name
     assert (os.path.isfile(checkpoints_path+"_config.json")
-            ), "Checkpoint not found."
+            ), "Checkpoint not found.(no such file)"
     model_config = json.loads(
         open(checkpoints_path+"_config.json", "r").read())
     latest_weights = find_latest_checkpoint(checkpoints_path)
-    assert (latest_weights is not None), "Checkpoint not found."
+    assert (latest_weights is not None), "Checkpoint not found.(no latest weight)"
     model = model_from_name[model_config['model_class']](
         model_config['n_classes'], input_height=model_config['input_height'],
-        input_width=model_config['input_width'])
+        input_width=model_config['input_width'], channels=3)
     print("loaded weights ", latest_weights)
+    #print(model.summary())
     status = model.load_weights(latest_weights)
 
     if status is not None:
@@ -38,13 +40,11 @@ def model_from_checkpoint_path(checkpoints_path):
 
     return model
 
-
 def get_colored_segmentation_image(seg_arr, n_classes, colors=class_colors):
     output_height = seg_arr.shape[0]
     output_width = seg_arr.shape[1]
 
     seg_img = np.zeros((output_height, output_width, 3))
-
     for c in range(n_classes):
         seg_arr_c = seg_arr[:, :] == c
         seg_img[:, :, 0] += ((seg_arr_c)*(colors[c][0])).astype('uint8')
@@ -53,6 +53,19 @@ def get_colored_segmentation_image(seg_arr, n_classes, colors=class_colors):
 
     return seg_img
 
+def get_colored_segmentation_image_SingleBand(seg_arr, n_classes, colors=class_colors):
+    output_height = seg_arr.shape[0]
+    output_width = seg_arr.shape[1]
+
+    seg_img = np.zeros((output_height, output_width, 1))
+
+    for c in range(n_classes):
+        seg_arr_c = seg_arr[:, :] == c
+        seg_img[:, :, 0] += ((seg_arr_c) * c).astype('uint8')
+        #seg_img[:, :, 1] += ((seg_arr_c) * ).astype('uint8')
+        #seg_img[:, :, 2] += ((seg_arr_c)).astype('uint8')
+
+    return seg_img
 
 def get_legends(class_names, colors=class_colors):
 
@@ -72,7 +85,6 @@ def get_legends(class_names, colors=class_colors):
 
     return legend
 
-
 def overlay_seg_image(inp_img, seg_img):
     orininal_h = inp_img.shape[0]
     orininal_w = inp_img.shape[1]
@@ -80,7 +92,6 @@ def overlay_seg_image(inp_img, seg_img):
 
     fused_img = (inp_img/2 + seg_img/2).astype('uint8')
     return fused_img
-
 
 def concat_lenends(seg_img, legend_img):
 
@@ -94,7 +105,6 @@ def concat_lenends(seg_img, legend_img):
 
     return out_img
 
-
 def visualize_segmentation(seg_arr, inp_img=None, n_classes=None,
                            colors=class_colors, class_names=None,
                            overlay_img=False, show_legends=False,
@@ -103,7 +113,8 @@ def visualize_segmentation(seg_arr, inp_img=None, n_classes=None,
     if n_classes is None:
         n_classes = np.max(seg_arr)
 
-    seg_img = get_colored_segmentation_image(seg_arr, n_classes, colors=colors)
+    #seg_img = get_colored_segmentation_image(seg_arr, n_classes, colors=colors)
+    seg_img = get_colored_segmentation_image_SingleBand(seg_arr, n_classes, colors=colors)
 
     if inp_img is not None:
         original_h = inp_img.shape[0]
@@ -128,7 +139,6 @@ def visualize_segmentation(seg_arr, inp_img=None, n_classes=None,
 
     return seg_img
 
-
 def predict(model=None, inp=None, out_fname=None,
             checkpoints_path=None, overlay_img=False,
             class_names=None, show_legends=False, colors=class_colors,
@@ -143,8 +153,11 @@ def predict(model=None, inp=None, out_fname=None,
         "Input should be the CV image or the input file name"
 
     if isinstance(inp, six.string_types):
-        inp = cv2.imread(inp, read_image_type)
-
+        if os.path.splitext(inp)[1] == ".tif":
+            inp = tifffile.imread(inp)
+        else:
+            inp = cv2.imread(inp, read_image_type)
+        #inp = cv2.imread(inp, read_image_type)
     assert (len(inp.shape) == 3 or len(inp.shape) == 1 or len(inp.shape) == 4), "Image should be h,w,3 "
 
     output_width = model.output_width
@@ -156,31 +169,81 @@ def predict(model=None, inp=None, out_fname=None,
     x = get_image_array(inp, input_width, input_height,
                         ordering=IMAGE_ORDERING)
     pr = model.predict(np.array([x]))[0]
-    pr = pr.reshape((output_height,  output_width, n_classes)).argmax(axis=2)
 
+    pr = pr.reshape((output_height,  output_width, n_classes)).argmax(axis=2)
     seg_img = visualize_segmentation(pr, inp, n_classes=n_classes,
                                      colors=colors, overlay_img=overlay_img,
                                      show_legends=show_legends,
                                      class_names=class_names,
                                      prediction_width=prediction_width,
                                      prediction_height=prediction_height)
-
     if out_fname is not None:
+        #cv2.imwrite(out_fname, pr)
         cv2.imwrite(out_fname, seg_img)
 
     return pr
 
-
-def predict_multiple(model=None, inps=None, inp_dir=None, out_dir=None,
-                     checkpoints_path=None, overlay_img=False,
-                     class_names=None, show_legends=False, colors=class_colors,
-                     prediction_width=None, prediction_height=None, read_image_type=1):
+def predict_binary(model=None, inp=None, out_fname=None,
+            checkpoints_path=None, overlay_img=False,
+            class_names=None, show_legends=False, colors=class_colors,
+            prediction_width=None, prediction_height=None,
+            read_image_type=1, ground_tres = 0.1, nonground_tres = 0.2):
 
     if model is None and (checkpoints_path is not None):
         model = model_from_checkpoint_path(checkpoints_path)
 
+    assert (inp is not None)
+    assert ((type(inp) is np.ndarray) or isinstance(inp, six.string_types)),\
+        "Input should be the CV image or the input file name"
+
+    if isinstance(inp, six.string_types):
+        if os.path.splitext(inp)[1] == ".tif":
+            inp = tifffile.imread(inp)
+        else:
+            inp = cv2.imread(inp, read_image_type)
+        #inp = cv2.imread(inp, read_image_type)
+    assert (len(inp.shape) == 3 or len(inp.shape) == 1 or len(inp.shape) == 4), "Image should be h,w,3 "
+
+    output_width = model.output_width
+    output_height = model.output_height
+    input_width = model.input_width
+    input_height = model.input_height
+    n_classes = model.n_classes
+
+    x = get_image_array(inp, input_width, input_height,
+                        ordering=IMAGE_ORDERING)  # inp[:, :, :3]
+    pr = model.predict(np.array([x]))[0]
+
+    pr = pr * 100
+    # pr[pr < ground_tres] = 0
+    # pr[pr > nonground_tres] = 2
+    # pr[(pr > ground_tres) & (pr < nonground_tres)] = 1    
+
+    seg_img = pr.reshape((output_height,  output_width, n_classes))
+    
+    #seg_img[inp[:, :, 1] == -0.1] = 1  #(Basically same but more straightforward)
+    #seg_img[((seg_img[:, :, 0] * inp[:, :, 3] == 0) & (seg_img[:, :, 0] != 0))] = 1
+    
+    #pr = pr.argmax(axis=2)
+
+    if out_fname is not None:
+        #cv2.imwrite(out_fname, pr)
+        cv2.imwrite(out_fname, seg_img)
+
+    return pr
+
+def predict_multiple_binary(model=None, inps=None, inp_dir=None, out_dir=None,
+                     checkpoints_path=None, overlay_img=False,
+                     class_names=None, show_legends=False, colors=class_colors,
+                     prediction_width=None, prediction_height=None, read_image_type=1,
+                     ground_tres = 0.4, nonground_tres = 0.6):
+
+    if model is None and (checkpoints_path is not None):
+        model = model_from_checkpoint_path(checkpoints_path)
+        print(model.summary)
+
     if inps is None and (inp_dir is not None):
-        inps = glob.glob(os.path.join(inp_dir, "*.jpg")) + glob.glob(
+        inps = glob.glob(os.path.join(inp_dir, "*.tif")) + glob.glob(os.path.join(inp_dir, "*.jpg")) + glob.glob(
             os.path.join(inp_dir, "*.png")) + \
             glob.glob(os.path.join(inp_dir, "*.jpeg"))
         inps = sorted(inps)
@@ -193,13 +256,58 @@ def predict_multiple(model=None, inps=None, inp_dir=None, out_dir=None,
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
 
+    for i, inp in enumerate(tqdm(inps)):
+        if out_dir is None:
+            out_fname = None
+        else:
+            if isinstance(inp, six.string_types):
+                #print(os.path.basename(inp))
+                out_fname = os.path.join(out_dir, os.path.basename(inp))
+                out_fname = os.path.join(out_dir, os.path.basename(inp)[0:-4] + ".png")
+            else:
+                out_fname = os.path.join(out_dir, str(i) + ".jpg")
+
+        pr = predict_binary(model, inp, out_fname,
+                     overlay_img=overlay_img, class_names=class_names,
+                     show_legends=show_legends, colors=colors,
+                     prediction_width=prediction_width,
+                     prediction_height=prediction_height, read_image_type=read_image_type, 
+                     ground_tres=ground_tres, nonground_tres=nonground_tres)
+
+        all_prs.append(pr)
+
+    return all_prs
+
+def predict_multiple(model=None, inps=None, inp_dir=None, out_dir=None,
+                     checkpoints_path=None, overlay_img=False,
+                     class_names=None, show_legends=False, colors=class_colors,
+                     prediction_width=None, prediction_height=None, read_image_type=1):
+
+    if model is None and (checkpoints_path is not None):
+        model = model_from_checkpoint_path(checkpoints_path)
+
+    if inps is None and (inp_dir is not None):
+        inps = glob.glob(os.path.join(inp_dir, "*.tif")) + glob.glob(os.path.join(inp_dir, "*.jpg")) + glob.glob(
+            os.path.join(inp_dir, "*.png")) + \
+            glob.glob(os.path.join(inp_dir, "*.jpeg"))
+        inps = sorted(inps)
+
+    assert type(inps) is list
+
+    all_prs = []
+
+    if not out_dir is None:
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
 
     for i, inp in enumerate(tqdm(inps)):
         if out_dir is None:
             out_fname = None
         else:
             if isinstance(inp, six.string_types):
+                #print(os.path.basename(inp))
                 out_fname = os.path.join(out_dir, os.path.basename(inp))
+                out_fname = os.path.join(out_dir, os.path.basename(inp)[0:-4] + ".png")
             else:
                 out_fname = os.path.join(out_dir, str(i) + ".jpg")
 
@@ -264,7 +372,7 @@ def predict_video(model=None, inp=None, output=None,
     cv2.destroyAllWindows()
 
 
-def evaluate(model=None, inp_images=None, annotations=None,
+def evaluate(model=None, inp_images=None, annotations=None, ignore_0 = False,
              inp_images_dir=None, annotations_dir=None, checkpoints_path=None, read_image_type=1):
 
     if model is None:
@@ -317,3 +425,125 @@ def evaluate(model=None, inp_images=None, annotations=None,
         "mean_IU": mean_IU,
         "class_wise_IU": cl_wise_score
     }
+
+def evaluate_ignore(model=None, inp_images=None, annotations=None, ignore_0 = False,
+
+             inp_images_dir=None, annotations_dir=None, checkpoints_path=None, read_image_type=1):
+
+    if model is None:
+        assert (checkpoints_path is not None),\
+                "Please provide the model or the checkpoints_path"
+        model = model_from_checkpoint_path(checkpoints_path)
+
+    if inp_images is None:
+        assert (inp_images_dir is not None),\
+                "Please provide inp_images or inp_images_dir"
+        assert (annotations_dir is not None),\
+            "Please provide inp_images or inp_images_dir"
+
+        paths = get_pairs_from_paths(inp_images_dir, annotations_dir)
+        paths = list(zip(*paths))
+        inp_images = list(paths[0])
+        annotations = list(paths[1])
+
+    assert type(inp_images) is list
+    assert type(annotations) is list
+
+    tp = np.zeros(model.n_classes)
+    fp = np.zeros(model.n_classes)
+    fn = np.zeros(model.n_classes)
+    n_pixels = np.zeros(model.n_classes)
+
+    for inp, ann in tqdm(zip(inp_images, annotations)):
+        pr = predict(model, inp, read_image_type=read_image_type)
+        gt = get_segmentation_array(ann, model.n_classes,
+                                    model.output_width, model.output_height,
+                                    no_reshape=True, read_image_type=read_image_type)
+
+        #===================
+        if os.path.splitext(inp)[1] == ".tif":
+            inpimg = tifffile.imread(inp)
+        else:
+            inpimg = cv2.imread(inp, read_image_type)
+
+        print(inpimg.shape)
+        inpimg = inpimg[:, :, 0].flatten()
+        #===================
+        
+        gt = gt.argmax(-1)
+        pr = pr.flatten()
+        gt = gt.flatten()
+
+        for cl_i in range(model.n_classes):
+
+            tp[cl_i] += np.sum( (pr == cl_i) * (gt == cl_i) * (inpimg != inpimg.min() ) )
+            fp[cl_i] += np.sum( (pr == cl_i) * (gt != cl_i) * (inpimg != inpimg.min() ) )
+            fn[cl_i] += np.sum( (pr != cl_i) * (gt == cl_i) * (inpimg != inpimg.min() ) )
+            n_pixels[cl_i] += np.sum((gt == cl_i) * (inpimg != inpimg.min()))
+
+    cl_wise_score = tp / (tp + fp + fn + 0.000000000001)
+    n_pixels_norm = n_pixels / np.sum(n_pixels)
+    frequency_weighted_IU = np.sum(cl_wise_score*n_pixels_norm)
+    mean_IU = np.mean(cl_wise_score)
+
+    return {
+        "frequency_weighted_IU": frequency_weighted_IU,
+        "mean_IU": mean_IU,
+        "class_wise_IU": cl_wise_score
+    }
+
+def evaluate_binary(model=None, inp_images=None, annotations=None, ignore_0 = False,
+             inp_images_dir=None, annotations_dir=None, checkpoints_path=None, read_image_type=1):
+
+    if model is None:
+        assert (checkpoints_path is not None),\
+                "Please provide the model or the checkpoints_path"
+        model = model_from_checkpoint_path(checkpoints_path)
+
+    if inp_images is None:
+        assert (inp_images_dir is not None),\
+                "Please provide inp_images or inp_images_dir"
+        assert (annotations_dir is not None),\
+            "Please provide inp_images or inp_images_dir"
+
+        paths = get_pairs_from_paths(inp_images_dir, annotations_dir)
+        paths = list(zip(*paths))
+        inp_images = list(paths[0])
+        annotations = list(paths[1])
+
+    assert type(inp_images) is list
+    assert type(annotations) is list
+
+    tp = np.zeros(3)
+    fp = np.zeros(3)
+    fn = np.zeros(3)
+    n_pixels = np.zeros(3)
+
+    for inp, ann in tqdm(zip(inp_images, annotations)):
+        pr = predict_binary(model, inp, read_image_type=read_image_type)
+        
+        if os.path.splitext(ann)[1] == ".tif":
+            ann = tifffile.imread(ann)
+        else:
+            ann = cv2.imread(ann, 1)
+
+        gt = ann[:, :, 0].flatten()
+        pr = pr.flatten()
+
+        for i in range(3):
+            if i == 1 : continue
+            tp[i] += np.sum((pr == i) * (gt == i))
+            fp[i] += np.sum((pr == i) * (gt != i))
+            fn[i] += np.sum((pr != i) * (gt == i))
+            n_pixels[i] += np.sum(gt == i)
+
+    cl_wise_score = tp / (tp + fp + fn + 0.000000000001)
+    n_pixels_norm = n_pixels / np.sum(n_pixels)
+    frequency_weighted_IU = np.sum(cl_wise_score*n_pixels_norm)
+    mean_IU = np.mean(cl_wise_score)
+
+    return {
+        "frequency_weighted_IU": frequency_weighted_IU,
+        "mean_IU": mean_IU,
+        "class_wise_IU": cl_wise_score
+    }    

@@ -4,13 +4,13 @@ from keras.layers import *
 from .config import IMAGE_ORDERING
 from .model_utils import get_segmentation_model
 from .vgg16 import get_vgg_encoder
-from .mobilenet import get_mobilenet_encoder
+from .mobilenet import get_mobilenet_encoder, get_mobilenet_encoder_deep
 from .basic_models import vanilla_encoder
 from .resnet50 import get_resnet50_encoder
 
 
 def segnet_decoder(f, n_classes, n_up=3):
-
+#def segnet_decoder(f, n_classes, n_up=4):
     assert n_up >= 2
 
     o = f
@@ -35,6 +35,13 @@ def segnet_decoder(f, n_classes, n_up=3):
     o = (Conv2D(64, (3, 3), padding='valid', data_format=IMAGE_ORDERING, name="seg_feats"))(o)
     o = (BatchNormalization())(o)
 
+    ## Don't need when using Res50NET
+    o = (UpSampling2D((2, 2), data_format=IMAGE_ORDERING))(o)
+    o = (ZeroPadding2D((1, 1), data_format=IMAGE_ORDERING))(o)
+    o = (Conv2D(64, (3, 3), padding='valid', data_format=IMAGE_ORDERING, name="seg_feats2"))(o)
+    o = (BatchNormalization())(o)
+    ##
+
     o = Conv2D(n_classes, (3, 3), padding='same',
                data_format=IMAGE_ORDERING)(o)
 
@@ -54,7 +61,7 @@ def _segnet(n_classes, encoder,  input_height=416, input_width=608,
     return model
 
 
-def segnet(n_classes, input_height=416, input_width=608, encoder_level=3, channels=3):
+def segnet(n_classes, input_height=416, input_width=608, encoder_level=2, channels=3):
 
     model = _segnet(n_classes, vanilla_encoder,  input_height=input_height,
                     input_width=input_width, encoder_level=encoder_level, channels=channels)
@@ -62,7 +69,7 @@ def segnet(n_classes, input_height=416, input_width=608, encoder_level=3, channe
     return model
 
 
-def vgg_segnet(n_classes, input_height=416, input_width=608, encoder_level=3, channels=3):
+def vgg_segnet(n_classes, input_height=416, input_width=608, encoder_level=2, channels=3):
 
     model = _segnet(n_classes, get_vgg_encoder,  input_height=input_height,
                     input_width=input_width, encoder_level=encoder_level, channels=channels)
@@ -71,7 +78,7 @@ def vgg_segnet(n_classes, input_height=416, input_width=608, encoder_level=3, ch
 
 
 def resnet50_segnet(n_classes, input_height=416, input_width=608,
-                    encoder_level=3, channels=3):
+                    encoder_level=2, channels=3):
 
     model = _segnet(n_classes, get_resnet50_encoder, input_height=input_height,
                     input_width=input_width, encoder_level=encoder_level, channels=channels)
@@ -80,6 +87,7 @@ def resnet50_segnet(n_classes, input_height=416, input_width=608,
 
 
 def mobilenet_segnet(n_classes, input_height=224, input_width=224,
+                     #encoder_level=2, channels=3):
                      encoder_level=3, channels=3):
 
     model = _segnet(n_classes, get_mobilenet_encoder,
@@ -88,6 +96,15 @@ def mobilenet_segnet(n_classes, input_height=224, input_width=224,
     model.model_name = "mobilenet_segnet"
     return model
 
+def mobilenet_segnet_deep(n_classes, input_height=224, input_width=224,
+                     #encoder_level=2, channels=3):
+                     encoder_level=3, channels=3):
+
+    model = _segnet(n_classes, get_mobilenet_encoder_deep,
+                    input_height=input_height,
+                    input_width=input_width, encoder_level=encoder_level, channels=channels)
+    model.model_name = "mobilenet_segnet"
+    return model
 
 if __name__ == '__main__':
     m = vgg_segnet(101)

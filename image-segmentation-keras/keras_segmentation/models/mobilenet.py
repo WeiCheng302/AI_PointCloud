@@ -1,8 +1,9 @@
 from keras.models import *
 from keras.layers import *
 import keras.backend as K
-import keras
-import tensorflow as tf
+#import keras
+from tensorflow import keras
+
 from .config import IMAGE_ORDERING
 
 BASE_WEIGHT_PATH = ('https://github.com/fchollet/deep-learning-models/'
@@ -55,6 +56,78 @@ def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha,
                            name='conv_pw_%d_bn' % block_id)(x)
     return Activation(relu6, name='conv_pw_%d_relu' % block_id)(x)
 
+def get_mobilenet_encoder_deep(input_height=224, input_width=224,
+                          pretrained='imagenet', channels=3):
+
+    # todo add more alpha and stuff
+
+    assert (K.image_data_format() ==
+            'channels_last'), "Currently only channels last mode is supported"
+    assert (IMAGE_ORDERING ==
+            'channels_last'), "Currently only channels last mode is supported"
+    assert input_height % 32 == 0 
+    assert input_width % 32 == 0 
+
+    alpha = 1.0
+    depth_multiplier = 1
+    dropout = 1e-3
+
+    img_input = Input(shape=(input_height, input_width, channels))
+
+    x = _conv_block(img_input, 32, alpha, strides=(2, 2))
+    x = _depthwise_conv_block(x, 64, alpha, depth_multiplier, block_id=1)
+
+    f1 = x
+
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier, strides=(2, 2), block_id=2)
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier, block_id=3)
+
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier, block_id=24)
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier, block_id=25)
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier, block_id=26)
+
+    f2 = x
+
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, strides=(2, 2), block_id=4)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=5)
+
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=14)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=15)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=16)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=17)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=18)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=19)    
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=20)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=21)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=22)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=23)
+
+    f3 = x
+
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier,
+                              strides=(2, 2), block_id=6)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=7)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=8)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=9)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=10)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=11)
+    f4 = x
+
+    x = _depthwise_conv_block(x, 1024, alpha, depth_multiplier,
+                              strides=(2, 2), block_id=12)
+    x = _depthwise_conv_block(x, 1024, alpha, depth_multiplier, block_id=13)
+    f5 = x
+
+    if pretrained == 'imagenet':
+        model_name = 'mobilenet_%s_%d_tf_no_top.h5' % ('1_0', 224)
+
+        weight_path = BASE_WEIGHT_PATH + model_name
+        weights_path = keras.utils.get_file(model_name, weight_path)
+
+        Model(img_input, x).load_weights(weights_path, by_name=True, skip_mismatch=True)
+
+    return img_input, [f1, f2, f3, f4, f5]
+
 
 def get_mobilenet_encoder(input_height=224, input_width=224,
                           pretrained='imagenet', channels=3):
@@ -65,9 +138,65 @@ def get_mobilenet_encoder(input_height=224, input_width=224,
             'channels_last'), "Currently only channels last mode is supported"
     assert (IMAGE_ORDERING ==
             'channels_last'), "Currently only channels last mode is supported"
+    assert input_height % 32 == 0 
+    assert input_width % 32 == 0 
 
-    assert input_height % 32 == 0
-    assert input_width % 32 == 0
+    alpha = 1.0
+    depth_multiplier = 1
+    dropout = 1e-3
+
+    img_input = Input(shape=(input_height, input_width, channels))
+
+    x = _conv_block(img_input, 32, alpha, strides=(2, 2))
+    x = _depthwise_conv_block(x, 64, alpha, depth_multiplier, block_id=1)
+    f1 = x
+
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier,
+                              strides=(2, 2), block_id=2)
+    x = _depthwise_conv_block(x, 128, alpha, depth_multiplier, block_id=3)
+    f2 = x
+
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier,
+                              strides=(2, 2), block_id=4)
+    x = _depthwise_conv_block(x, 256, alpha, depth_multiplier, block_id=5)
+
+    f3 = x
+
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier,
+                              strides=(2, 2), block_id=6)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=7)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=8)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=9)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=10)
+    x = _depthwise_conv_block(x, 512, alpha, depth_multiplier, block_id=11)
+    f4 = x
+
+    x = _depthwise_conv_block(x, 1024, alpha, depth_multiplier,
+                              strides=(2, 2), block_id=12)
+    x = _depthwise_conv_block(x, 1024, alpha, depth_multiplier, block_id=13)
+    f5 = x
+
+    if pretrained == 'imagenet':
+        model_name = 'mobilenet_%s_%d_tf_no_top.h5' % ('1_0', 224)
+
+        weight_path = BASE_WEIGHT_PATH + model_name
+        weights_path = keras.utils.get_file(model_name, weight_path)
+
+        Model(img_input, x).load_weights(weights_path, by_name=True, skip_mismatch=True)
+
+    return img_input, [f1, f2, f3, f4, f5]
+
+def get_mobilenet_encoder_Thin(input_height=224, input_width=224,
+                          pretrained='imagenet', channels=3):
+
+    # todo add more alpha and stuff
+
+    assert (K.image_data_format() ==
+            'channels_last'), "Currently only channels last mode is supported"
+    assert (IMAGE_ORDERING ==
+            'channels_last'), "Currently only channels last mode is supported"
+    assert input_height % 32 == 0 
+    assert input_width % 32 == 0 
 
     alpha = 1.0
     depth_multiplier = 1
@@ -107,7 +236,7 @@ def get_mobilenet_encoder(input_height=224, input_width=224,
         model_name = 'mobilenet_%s_%d_tf_no_top.h5' % ('1_0', 224)
 
         weight_path = BASE_WEIGHT_PATH + model_name
-        weights_path = tf.keras.utils.get_file(model_name, weight_path)
+        weights_path = keras.utils.get_file(model_name, weight_path)
 
         Model(img_input, x).load_weights(weights_path, by_name=True, skip_mismatch=True)
 

@@ -4,6 +4,9 @@ import random
 import six
 import numpy as np
 import cv2
+import tifffile
+from multiprocessing import cpu_count, Pool
+import threading
 
 try:
     from collections.abc import Sequence
@@ -20,7 +23,7 @@ except ImportError:
 
 
 from ..models.config import IMAGE_ORDERING
-from .augmentation import augment_seg, custom_augment_seg
+from ..data_utils.augmentation import augment_seg, custom_augment_seg
 
 DATA_LOADER_SEED = 0
 
@@ -29,14 +32,12 @@ class_colors = [(random.randint(0, 255), random.randint(
     0, 255), random.randint(0, 255)) for _ in range(5000)]
 
 
-ACCEPTABLE_IMAGE_FORMATS = [".jpg", ".jpeg", ".png", ".bmp"]
-ACCEPTABLE_SEGMENTATION_FORMATS = [".png", ".bmp"]
+ACCEPTABLE_IMAGE_FORMATS = [".jpg", ".jpeg", ".png", ".bmp", ".tif"]
+ACCEPTABLE_SEGMENTATION_FORMATS = [".png", ".bmp", ".tif"]
 
 
 class DataLoaderError(Exception):
     pass
-
-
 
 def get_image_list_from_path(images_path ):
     image_files = []
@@ -53,11 +54,8 @@ def get_pairs_from_paths(images_path, segs_path, ignore_non_matching=False, othe
         the segmentation images from the segs_path directory
         while checking integrity of data """
 
-
-
     image_files = []
     segmentation_files = {}
-
     for dir_entry in os.listdir(images_path):
         if os.path.isfile(os.path.join(images_path, dir_entry)) and \
                 os.path.splitext(dir_entry)[1] in ACCEPTABLE_IMAGE_FORMATS:
@@ -131,9 +129,8 @@ def get_pairs_from_paths(images_path, segs_path, ignore_non_matching=False, othe
 
 def get_image_array(image_input,
                     width, height,
-                    imgNorm="sub_mean", ordering='channels_first', read_image_type=1):
+                    imgNorm="None", ordering='channels_first', read_image_type=1):
     """ Load image array from input """
-
     if type(image_input) is np.ndarray:
         # It is already an array, use it as it is
         img = image_input
@@ -141,7 +138,11 @@ def get_image_array(image_input,
         if not os.path.isfile(image_input):
             raise DataLoaderError("get_image_array: path {0} doesn't exist"
                                   .format(image_input))
-        img = cv2.imread(image_input, read_image_type)
+        if os.path.splitext(image_input)[1] is ".tif":
+            img = tifffile.imread(image_input)
+        else:
+            img = cv2.imread(image_input, read_image_type)
+            #print("IMG")
     else:
         raise DataLoaderError("get_image_array: Can't process input type {0}"
                               .format(str(type(image_input))))
@@ -163,10 +164,28 @@ def get_image_array(image_input,
         img = cv2.resize(img, (width, height))
         img = img.astype(np.float32)
         img = img/255.0
+    elif imgNorm == "None":
+        img = cv2.resize(img, (width, height))
 
     if ordering == 'channels_first':
         img = np.rollaxis(img, 2, 0)
     return img
+
+def get_segmentation_array_float(image_input, nClasses,
+                           width, height, no_reshape=False, read_image_type=1):
+
+    seg_labels = np.zeros((height, width, nClasses))
+    img = image_input
+    class_list = np.array([0, 0.5, 1])
+    
+    for c in range(nClasses):
+        seg_labels[:, :, 0] = class_list[c]
+        # seg_labels[:, :, c] = (img == class_list[c]).astype(np.float32)
+
+    if not no_reshape:
+        seg_labels = np.reshape(seg_labels, (width*height, nClasses))
+
+    return seg_labels
 
 
 def get_segmentation_array(image_input, nClasses,
@@ -182,14 +201,22 @@ def get_segmentation_array(image_input, nClasses,
         if not os.path.isfile(image_input):
             raise DataLoaderError("get_segmentation_array: "
                                   "path {0} doesn't exist".format(image_input))
-        img = cv2.imread(image_input, read_image_type)
+        if os.path.splitext(image_input)[1] is ".tif":
+            img = tifffile.imread(image_input)
+        else:
+            img = cv2.imread(image_input, read_image_type)
     else:
         raise DataLoaderError("get_segmentation_array: "
                               "Can't process input type {0}"
                               .format(str(type(image_input))))
 
     img = cv2.resize(img, (width, height), interpolation=cv2.INTER_NEAREST)
-    img = img[:, :, 0]
+    ##########
+    # Fill in disappeared during augmentation ?
+    # Consider to use the Upper functions
+    ##########
+    img = img[:, :, 0] 
+    #class_list = np.array([0, 0.5, 1])
 
     for c in range(nClasses):
         seg_labels[:, :, c] = (img == c).astype(int)
@@ -212,7 +239,10 @@ def verify_segmentation_dataset(images_path, segs_path,
 
         return_value = True
         for im_fn, seg_fn in tqdm(img_seg_pairs):
-            img = cv2.imread(im_fn)
+            if os.path.splitext(im_fn)[1] == ".tif":
+                img = tifffile.imread(im_fn)
+            else:
+                img = cv2.imread(im_fn)
             seg = cv2.imread(seg_fn)
             # Check dimensions match
             if not img.shape == seg.shape:
@@ -240,7 +270,6 @@ def verify_segmentation_dataset(images_path, segs_path,
     except DataLoaderError as e:
         print("Found error during data loading\n{0}".format(str(e)))
         return False
-
 
 def image_segmentation_generator(images_path, segs_path, batch_size,
                                  n_classes, input_height, input_width,
@@ -275,8 +304,11 @@ def image_segmentation_generator(images_path, segs_path, batch_size,
                     im, seg = next(zipped)
                     seg = cv2.imread(seg, 1)
 
-                im = cv2.imread(im, read_image_type)
-                
+                if os.path.splitext(im)[1] == ".tif":
+                    im = tifffile.imread(im)
+                    #print("TIF")
+                else:
+                    im = cv2.imread(im, read_image_type)
 
                 if do_augment:
 
@@ -300,7 +332,11 @@ def image_segmentation_generator(images_path, segs_path, batch_size,
 
                 im, seg, others = next(zipped)
 
-                im = cv2.imread(im, read_image_type)
+                #im = cv2.imread(im, read_image_type)
+                if os.path.splitext(im)[1] is ".tif":
+                    im = tifffile.imread(im)
+                else:
+                    im = cv2.imread(im, read_image_type)
                 seg = cv2.imread(seg, 1)
 
                 oth = []
@@ -341,3 +377,202 @@ def image_segmentation_generator(images_path, segs_path, batch_size,
             yield np.array(X)
         else:
             yield np.array(X), np.array(Y)
+
+def read_all_imgs(images_path, segs_path, read_image_type=cv2.IMREAD_COLOR):
+
+    img_seg_pairs = get_pairs_from_paths(images_path, segs_path)
+    zipped = itertools.cycle(img_seg_pairs)
+
+    img_list = []
+    seg_list = []
+
+    for i in range(len(img_seg_pairs)):
+
+        im, seg = next(zipped)
+
+        if os.path.splitext(seg)[1] == ".tif":
+            seg = tifffile.imread(seg)
+        else:
+            seg = cv2.imread(seg, 1)
+
+        if os.path.splitext(im)[1] == ".tif":
+            im = tifffile.imread(im)
+        else:
+            im = cv2.imread(im, read_image_type)
+        img_list.append(im)
+        #img_list.append(im[:, :, 0:3])
+        seg_list.append(seg[: , : , 0])
+
+    return img_list, seg_list
+
+def Clip_and_Aug(im, seg, X, Y, h, w, input_height, input_width, n_classes, output_height, output_width, do_augment, augmentation_name):
+
+    imClip = im[h : h + input_height, w : w + input_width]
+    segClip = seg[h : h + input_height, w : w + input_width]
+
+    if do_augment: 
+        imClip, segClip = augment_seg(imClip, segClip, augmentation_name)
+
+    X.append(get_image_array(imClip, input_width,
+                                     input_height, imgNorm="None", ordering=IMAGE_ORDERING))
+    Y.append(get_segmentation_array_float(
+                    segClip, n_classes, output_width, output_height))
+
+    return X, Y
+
+def random_img_seg_generator_pre_read_multi(img_list, seg_list, batch_size, 
+                             n_classes, input_height, input_width,
+                             output_height, output_width, do_augment = False, 
+                             augmentation_name="aug_flip_and_rot", multi = False):
+
+    img_index = np.arange(len(img_list))
+    random.shuffle(img_index)
+    zipped = itertools.cycle(img_index)
+
+    while True:
+        X = []
+        Y = []
+
+        idx = next(zipped)
+
+        im = img_list[idx]
+        seg = seg_list[idx]
+
+        # Make sure the ratio between clipped img and large img
+
+        threads = []
+        for i in range(int(batch_size)):            
+
+            h = random.randint(0, im.shape[0] - input_height)
+            w = random.randint(0, im.shape[1] - input_width)
+
+            threads.append(threading.Thread(target= Clip_and_Aug, 
+                                            args = ((im, seg, X, Y, h, w, input_height, input_width, n_classes, output_height, output_width, do_augment, augmentation_name))))
+            threads[i].start()
+
+        for i in range(int(batch_size)):
+            threads[i].join()            
+
+        yield np.array(X), np.array(Y)
+
+def random_img_seg_generator_pre_read(img_list, seg_list, batch_size, 
+                             n_classes, input_height, input_width,
+                             output_height, output_width, do_augment = False, 
+                             augmentation_name="aug_flip_and_rot"):
+
+
+    while True:
+        X = []
+        Y = []
+
+        # Make sure the ratio between clipped img and large img
+        for _ in range(batch_size):
+
+            img_index = np.arange(len(img_list))
+            random.shuffle(img_index)
+            zipped = itertools.cycle(img_index)
+
+            idx = next(zipped)
+
+            im = img_list[idx]
+            seg = seg_list[idx]
+
+            h = random.randint(0, im.shape[0] - input_height)
+            w = random.randint(0, im.shape[1] - input_width)
+
+            imClip = im[h : h + input_height, w : w + input_width]
+            segClip = seg[h : h + input_height, w : w + input_width]
+
+            #seg_labels = np.zeros((input_height, input_width, 3))
+            #for c in range(3):
+            #    seg_labels[:, :, c] = (segClip == c).astype(int)
+
+            #segClip = seg_labels
+            segClip = segClip/2 # Read the Labels
+
+            if do_augment: 
+                #imClip, segClip[:, :, 0] = augment_seg(imClip, segClip[:, :, 0], augmentation_name)
+                imClip, segClip = augment_seg(imClip, segClip, augmentation_name)
+
+            X.append(get_image_array(imClip, input_width,
+                                     input_height, imgNorm="None", ordering=IMAGE_ORDERING))  #[:, :, 0:3]
+            
+            #CE
+            #segClip = np.reshape(segClip, (input_width*input_height, 3))
+            #Y.append(segClip)
+
+            #BCE
+            Y.append(segClip.flatten()) #<===== Be Careful
+            #Y.append(get_segmentation_array_float(
+                    #segClip, n_classes, output_width, output_height))
+
+        yield np.array(X), np.array(Y)
+
+def random_img_seg_generator(images_path, segs_path, batch_size, 
+                             n_classes, input_height, input_width,
+                             output_height, output_width, do_augment = False, 
+                             augmentation_name="aug_flip_and_rot", 
+                             read_image_type=cv2.IMREAD_COLOR):
+
+    img_seg_pairs = get_pairs_from_paths(images_path, segs_path)
+    random.shuffle(img_seg_pairs)
+    zipped = itertools.cycle(img_seg_pairs)
+
+    while True:
+        X = []
+        Y = []
+
+        im, seg = next(zipped)
+
+        if os.path.splitext(seg)[1] == ".tif":
+            seg = tifffile.imread(seg)
+        else:
+            seg = cv2.imread(seg, 1)
+
+        if os.path.splitext(im)[1] == ".tif":
+            im = tifffile.imread(im)
+        else:
+            im = cv2.imread(im, read_image_type)
+
+        # Make sure the ratio between clipped img and large img
+        count = -1
+        for _ in range(batch_size):
+
+            count += 1
+            
+            if count >= batch_size/2 :
+
+                count = -1
+                
+                im, seg = next(zipped)                
+
+                if os.path.splitext(seg)[1] == ".tif":
+                    seg = tifffile.imread(seg)
+                    #print(seg)
+                else:
+                    seg = cv2.imread(seg, 1)
+                    #print(seg)
+
+                if os.path.splitext(im)[1] == ".tif":
+                    im = tifffile.imread(im)
+                else:
+                    im = cv2.imread(im, read_image_type)
+
+            h = random.randint(0, im.shape[0] - input_height)
+            w = random.randint(0, im.shape[1] - input_width)
+
+            imClip = im[h : h + input_height, w : w + input_width]
+            segClip = seg[h : h + input_height, w : w + input_width]
+            #segClip = segClip/2
+
+            if do_augment: 
+                #imClip, segClip[:, :, 0] = augment_seg(imClip, segClip[:, :, 0], augmentation_name)
+                imClip, segClip = augment_seg(imClip, segClip, augmentation_name)
+
+
+                X.append(get_image_array(imClip, input_width,
+                                         input_height, ordering=IMAGE_ORDERING))
+                Y.append(get_segmentation_array_float(
+                    segClip, n_classes, output_width, output_height))
+
+        yield np.array(X), np.array(Y)

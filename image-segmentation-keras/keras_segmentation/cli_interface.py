@@ -4,7 +4,7 @@ import sys
 import argparse
 
 from .train import train
-from .predict import predict, predict_multiple, predict_video, evaluate
+from .predict import evaluate_binary, predict, predict_binary, predict_multiple, predict_multiple_binary, predict_video, evaluate, evaluate_ignore
 from .data_utils.data_loader import verify_segmentation_dataset
 from .data_utils.visualize_dataset import visualize_segmentation_dataset
 
@@ -57,7 +57,6 @@ def train_action(command_parser):
 
     parser.set_defaults(func=action)
 
-
 def predict_action(command_parser):
 
     parser = command_parser.add_parser('predict')
@@ -67,11 +66,32 @@ def predict_action(command_parser):
 
     def action(args):
         input_path_extension = args.input_path.split('.')[-1]
-        if input_path_extension in ['jpg', 'jpeg', 'png']:
+        print(input_path_extension)
+        if input_path_extension in ['jpg', 'jpeg', 'png', 'tif']:
             return predict(inp=args.input_path, out_fname=args.output_path,
                            checkpoints_path=args.checkpoints_path)
         else:
             return predict_multiple(inp_dir=args.input_path,
+                                    out_dir=args.output_path,
+                                    checkpoints_path=args.checkpoints_path)
+
+    parser.set_defaults(func=action)
+
+def predict_binary_action(command_parser):
+
+    parser = command_parser.add_parser('predict_binary')
+    parser.add_argument("--checkpoints_path", type=str, required=True)
+    parser.add_argument("--input_path", type=str, default="", required=True)
+    parser.add_argument("--output_path", type=str, default="", required=True)
+
+    def action(args):
+        input_path_extension = args.input_path.split('.')[-1]
+        print(input_path_extension)
+        if input_path_extension in ['jpg', 'jpeg', 'png', 'tif']:
+            return predict_binary(inp=args.input_path, out_fname=args.output_path,
+                           checkpoints_path=args.checkpoints_path)
+        else:
+            return predict_multiple_binary(inp_dir=args.input_path,
                                     out_dir=args.output_path,
                                     checkpoints_path=args.checkpoints_path)
 
@@ -94,7 +114,6 @@ def predict_video_action(command_parser):
 
     parser.set_defaults(func=action)
 
-
 def evaluate_model_action(command_parser):
 
     parser = command_parser.add_parser('evaluate_model')
@@ -109,6 +128,33 @@ def evaluate_model_action(command_parser):
 
     parser.set_defaults(func=action)
 
+def evaluate_model_action_ignore(command_parser):
+
+    parser = command_parser.add_parser('evaluate_model_ignore')
+    parser.add_argument("--images_path", type=str, required=True)
+    parser.add_argument("--segs_path", type=str, required=True)
+    parser.add_argument("--checkpoints_path", type=str, required=True)
+
+    def action(args):
+        print(evaluate_ignore(
+            inp_images_dir=args.images_path, annotations_dir=args.segs_path,
+            checkpoints_path=args.checkpoints_path))
+
+    parser.set_defaults(func=action)
+
+def evaluate_model_action_binary(command_parser):
+
+    parser = command_parser.add_parser('evaluate_model_binary')
+    parser.add_argument("--images_path", type=str, required=True)
+    parser.add_argument("--segs_path", type=str, required=True)
+    parser.add_argument("--checkpoints_path", type=str, required=True)
+
+    def action(args):
+        print(evaluate_binary(
+            inp_images_dir=args.images_path, annotations_dir=args.segs_path,
+            checkpoints_path=args.checkpoints_path))
+
+    parser.set_defaults(func=action)
 
 def verify_dataset_action(command_parser):
 
@@ -122,7 +168,6 @@ def verify_dataset_action(command_parser):
             args.images_path, args.segs_path, args.n_classes)
 
     parser.set_defaults(func=action)
-
 
 def visualize_dataset_action(command_parser):
 
@@ -154,6 +199,10 @@ def main():
     verify_dataset_action(command_parser)
     visualize_dataset_action(command_parser)
     evaluate_model_action(command_parser)
+    evaluate_model_action_ignore(command_parser)
+
+    predict_binary_action(command_parser)
+    evaluate_model_action_binary(command_parser)
 
     args = main_parser.parse_args()
 

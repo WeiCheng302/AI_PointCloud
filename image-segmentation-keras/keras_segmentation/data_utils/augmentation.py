@@ -1,5 +1,4 @@
 import numpy as np
-
 try:
     import imgaug as ia
     from imgaug import augmenters as iaa
@@ -8,7 +7,6 @@ except ImportError:
           "Please make sure it is installed.")
 
 
-IMAGE_AUGMENTATION_SEQUENCE = None
 IMAGE_AUGMENTATION_NUM_TRIES = 10
 
 loaded_augmentation_name = ""
@@ -179,12 +177,28 @@ def _load_augmentation_aug_all():
         random_order=True
     )
 
+def _load_augmentation_aug_flip_and_rot():
+    """ Load image augmentation model """
+
+    def sometimes(aug):
+        return iaa.Sometimes(0.5, aug)
+
+    return iaa.Sequential(
+        [
+            # apply the following augmenters to most images
+            iaa.Fliplr(0.5),  # horizontally flip 50% of all images
+            iaa.Flipud(0.5),  # vertically flip 50% of all images
+            sometimes(iaa.Rot90((1, 3)))
+        ],
+        random_order=True
+    )
 
 augmentation_functions = {
     "aug_all": _load_augmentation_aug_all,
     "aug_all2": _load_augmentation_aug_all2,
     "aug_geometric": _load_augmentation_aug_geometric,
-    "aug_non_geometric": _load_augmentation_aug_non_geometric
+    "aug_non_geometric": _load_augmentation_aug_non_geometric,
+    "aug_flip_and_rot":_load_augmentation_aug_flip_and_rot
 }
 
 
@@ -202,6 +216,8 @@ def _augment_seg(img, seg, augmentation_name="aug_all", other_imgs=None):
 
     global loaded_augmentation_name
 
+    _load_augmentation(augmentation_name)### Not exist at first actually ...
+    
     if (not IMAGE_AUGMENTATION_SEQUENCE) or\
        (augmentation_name != loaded_augmentation_name):
         _load_augmentation(augmentation_name)
@@ -214,14 +230,17 @@ def _augment_seg(img, seg, augmentation_name="aug_all", other_imgs=None):
 
     if other_imgs is not None:
         image_aug = [image_aug]
-
         for other_img in other_imgs:
             image_aug.append(aug_det.augment_image(other_img))
 
-    segmap = ia.SegmentationMapsOnImage(
-        seg, shape=img.shape)
+    #segmap = ia.SegmentationMapOnImage(
+    seg = (seg * 2 ).astype(np.int32)
+    segmap = ia.SegmentationMapsOnImage(seg, shape=img.shape)
+        
     segmap_aug = aug_det.augment_segmentation_maps(segmap)
     segmap_aug = segmap_aug.get_arr()
+
+    segmap_aug = segmap_aug / 2
 
     return image_aug, segmap_aug
 
