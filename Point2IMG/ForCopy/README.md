@@ -1,0 +1,1 @@
+The empty folder structure for data storage.
