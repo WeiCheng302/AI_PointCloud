@@ -22,10 +22,13 @@ from laspy import read
 from numba import njit
 from os.path import basename
 from ARSEMimgTW import ReadImg, CreateImgArray, SetImgValueAll, SavePNG
+from keras_segmentation_mod.predict import predict_from_featImg_binary
 
-motherfolder = "D:\Point2IMG\Taiwan/0523_Plane/"
+motherfolder = "D:\Point2IMG\Taiwan/0707_Seamless/"
 
-checkpoint = "D:/image-segmentation-keras/0523_Plane/CheckPoints\_0523_TW_Plane_MbSeg_demPrepro_MBCE_RD_Adam"
+#checkpoint = "D:/image-segmentation-keras/0707_LowVeg/CheckPoints\_0706_TW_LowVeg_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
+checkpoint = "D:/image-segmentation-keras/0707_City/CheckPoints\_0706_TW_City_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
+#checkpoint = "D:/image-segmentation-keras/0707_Forest/CheckPoints\_0706_TW_Forest_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
 
 inpt_allimg = motherfolder + "All_Img"
 inpt_allLabel = motherfolder + "All_Label"
@@ -123,8 +126,15 @@ def MergeImg(filename, out_predict_folder, out_merge, ignore_0 = False):
         #print(basename(imgfile))
         # h = int(basename(imgfile)[0:-4].split('_')[1])
         # w = int(basename(imgfile)[0:-4].split('_')[2])
-        h = int(basename(imgfile)[0:-4].split('_')[2])
-        w = int(basename(imgfile)[0:-4].split('_')[3])
+        h = int(float(basename(imgfile)[0:-4].split('_')[2]))
+        w = int(float(basename(imgfile)[0:-4].split('_')[3]))
+
+        if h != int(h) : 
+            h += 0.25
+            img = img[ int(imgH / 4) : int(imgH * 3 / 4), : ]
+        if w != int(w) : 
+            w += 0.25
+            img = img[ : , int(imgW / 4) : int(imgW * 3 / 4)]
             
         if ignore_0:
             mask = CreateMask(imgfile)
@@ -314,8 +324,8 @@ def Eval(pred_Bin_MS_Img, filename, inpt_UnClippedLabel):
     Accuracy, Recall, Precision, f1, Accuracy_MS, Recall_MS, Precision_MS, f1_MS, cfm = checkclassification(Labelimg, pred_Bin_MS_Img)
     
     print('Confusion Matrix')
-    print('gg : ' + str(cfm[0, 0]) + ' gng : ' + str(cfm[0, 1]))
-    print('ngg : ' + str(cfm[1, 0]) + ' ngng : ' + str(cfm[1, 1]))
+    print('gg : ' + str(cfm[0, 0]) + ' ngg : ' + str(cfm[1, 0]))
+    print('gng : ' + str(cfm[0, 1]) + ' ngng : ' + str(cfm[1, 1]))
     print(' ')
     print('Without Considering Missing Pixels : ')
     print('Accuracy : ' + str(Accuracy) + ' Precision : ' + str(Precision))
@@ -340,49 +350,116 @@ def PredAcc(filename, outImg, inpt_UnClippedLabel):
     print(CF_Mat)
     print(Accu, Prec, Rec, F1S)
 
+def featImgMerger(featTIFList, locationList, imgInfo):
+    out = np.zeros((imgInfo[0], imgInfo[1], imgInfo[2]))
+    #imgInfo：[0:b, 1:H, 2:W, 3:cropHcount, 4:cropWcount, 5:stride, 6:cropH, 7cropW]
+    imgH = imgInfo[1]
+    imgW = imgInfo[2]
+    cropHcount = imgInfo[3]
+    cropWcount = imgInfo[4]
+    stride = imgInfo[5]
+    cropH = imgInfo[6]
+    cropW = imgInfo[7]
+
+    for i, img in enumerate(featTIFList):
+
+        h = int(locationList[0, i])
+        w = int(locationList[1, i])
+        
+        if h == cropHcount and w == cropWcount: # Corner
+            out[:, imgH - 1 - cropH :  imgH - 1, imgW - 1 - cropW : imgW - 1] = img
+        elif h == cropHcount and w != cropWcount: # Horizonal Bottom
+            out[:, imgH - 1 - cropH : imgH - 1, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == cropWcount: # Vertical RSide
+            out[:, h * stride : (h * stride + cropH) , (imgW - 1 - cropW) : (imgW - 1)] = img
+        elif h == 0 and w != cropWcount: # Horizonal Top
+            out[:, 0 : cropH, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == 0: # Vertical LSide
+            out[:, h * stride : h * stride + cropH, 0 : cropW] = img
+        else : #Middle
+            middle = img[:, int(cropH * 0.25) : int(cropH * 0.75), int(cropW * 0.25) : int(cropW * 0.75)]
+            out[:, h * stride + int(cropH * 0.25) : h * stride + + int(cropH * 0.75), w * stride + int(cropW * 0.25) : w * stride + int(cropW * 0.75)] = middle
+        
+    return out
+
+def LabelImgMerger(featpngList, locationList, imgInfo):
+    out = np.zeros((1, imgInfo[1], imgInfo[2]))
+    #imgInfo：[0:b, 1:H, 2:W, 3:cropHcount, 4:cropWcount, 5:stride, 6:cropH, 7cropW]
+    imgH = imgInfo[1]
+    imgW = imgInfo[2]
+    cropHcount = imgInfo[3]
+    cropWcount = imgInfo[4]
+    stride = imgInfo[5]
+    cropH = imgInfo[6]
+    cropW = imgInfo[7]
+
+    for i, img in enumerate(featpngList):
+
+        h = int(locationList[0, i])
+        w = int(locationList[1, i])
+        img = np.moveaxis(img, 2, 0)
+        
+        if h == cropHcount and w == cropWcount: # Corner
+            out[0, imgH - 1 - cropH :  imgH - 1, imgW - 1 - cropW : imgW - 1] = img
+        elif h == cropHcount and w != cropWcount: # Horizonal Bottom
+            out[0, imgH - 1 - cropH : imgH - 1, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == cropWcount: # Vertical RSide
+            out[0, h * stride : (h * stride + cropH) , (imgW - 1 - cropW) : (imgW - 1)] = img
+        elif h == 0 and w != cropWcount: # Horizonal Top
+            out[0, 0 : cropH, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == 0: # Vertical LSide
+            out[0, h * stride : h * stride + cropH, 0 : cropW] = img
+        else : #Middle
+            middle = img[:, int(cropH * 0.25) : int(cropH * 0.75), int(cropW * 0.25) : int(cropW * 0.75)]
+            out[0, h * stride + int(cropH * 0.25) : h * stride + + int(cropH * 0.75), w * stride + int(cropW * 0.25) : w * stride + int(cropW * 0.75)] = middle
+        
+    return out
 
 if __name__ == "__main__":
     
     #Prediction
     #commander_binary(Predict_bin = True, Eval_All = False)
 
-    fileList = glob.glob("E:\project_data/apply\Plane\DEMfilt" + "/*.las") #/Pure
-    #fileList = glob.glob("E:\project_data/apply\City\DEMfilt" + "/*.las")
+    fileList = glob.glob("E:\project_data/apply\GroundObject\Testing" + "/*.las") # Testing
+    #fileList = glob.glob("E:\project_data/apply\GroundObject\Forest" + "/*.las") # Forest
+    #fileList = glob.glob("E:\project_data/apply\GroundObject\LowVeg" + "/*.las") # LowVeg
+    #fileList = glob.glob("E:\project_data/apply\GroundObject\City" + "/*.las") # City
 
+    #fileList = glob.glob("E:\project_data/apply\Plane\DEMfilt" + "/*.las")  #Plane
+    #fileList = glob.glob("E:\project_data/apply\City\DEMfilt" + "/*.las") # Pure #City
+    #fileList = glob.glob("E:\project_data/apply\Mont\DEMfilt" + "/*.las") # Mountain
+    #fileList = glob.glob("E:\project_data/apply\Hill\DEMfilt" + "/*.las") # Hill
 
     thres = 2
     sigma = 0.05
     threshold = 73
 
     for filename in fileList:
+
         print(basename(filename)[0:8])
-        if basename(filename)[0:8] == '94191036' : continue
-        #if basename(filename)[0:8] not in ['94182065', '94182039'] : continue
-        if basename(filename)[0:8] not in ['94181061', '95203004'] : continue #['94184019'] : continue
+        if basename(filename)[0:8] == '94191036' : continue #Not Readable
+        featImg = ARSEMimg.ReadImg(inpt_UnClippedtrain + basename(filename)[0:-4] + '.tif')
+        
+        locationlist, croppedList, imgInfo = ARSEMimg.featImgCropper(featImg, 256, 256, 128)    
+        pr = predict_from_featImg_binary(inps= croppedList, checkpoints_path=checkpoint)
+        probImg = LabelImgMerger(pr, locationlist, imgInfo)        
+
+        #if basename(filename)[0:8] not in ['94181056', '94191039', '94193025', '95203096'] : continue # Forest
+        #if basename(filename)[0:8] not in ['94181012', '94184019', '94202029', '95213016'] : continue # City
+        #if basename(filename)[0:8] not in ['94181053', '94192032', '95174002', '95204062'] : continue # LowVeg
+        #if basename(filename)[0:8] not in ['95174021', '94191048', '95212098'] : continue # Testing
+        #if basename(filename)[0:8] not in ['95203043', '94181056'] : continue # Hill Evaluation
+        #if basename(filename)[0:8] not in ['95183019', '95212001'] : continue # Mountain Evaluation
+        #if basename(filename)[0:8] not in ['94182065', '94182039'] : continue # City Evaluation
+        #if basename(filename)[0:8] not in ['94181061', '95203004'] : continue #['94184019'] : continue # Plane Evaluation
         #if basename(filename)[0:8] != : continue
 
         #if basename(filename)[0:8] not in  ['94202006']:continue#, '94181061', '95203004', '94202006', '94202005']:continue# , '95203004' , '94184060'] : continue
-        probImg = MergeImg(filename, out_predict_folder, out_merge)
+        #probImg = MergeImg(filename, out_predict_folder, out_merge)
         binImg = ToBinaryImg(probImg, threshold)
         outImg = MissingValueCover(filename, binImg, inpt_UnClippedtrain) #binImg#
         SavePNG(out_merge + basename(filename)[0:-4] + '_bin_MS' + str(threshold) + '_Mid.png', outImg) #[0]
         print('\nGround Threshold : ' + str(threshold))
         Eval(outImg, filename, inpt_UnClippedLabel) #[0]
 
-        BackProjection(filename, outImg)
-    #Merging Image    
-    # for filename in fileList:
-    #     if basename(filename)[0:8] not in  ['94181061', '95203004', '94202006', '94202005'] : continue
-
-    #     for i in [18,65,67,69,71,73,75,77,79,81,83,85,87,89,91]:
-    #         probImg = MergeImg(filename, out_predict_folder, out_merge)
-    #         binImg = ToBinaryImg(probImg, i)  #findThres(probImg))  #SavePNG(out_merge + basename(filename)[0:-4] + '_bin.png', binImg[0])
-    #         outImg = MissingValueCover(filename, binImg, inpt_UnClippedtrain)
-    #         SavePNG(out_merge + basename(filename)[0:-4] + '_bin_MS' + str(i) + '.png', outImg)
-    #         print('\nGround Threshold : ' + str(i))
-    #         Eval(outImg, filename, inpt_UnClippedLabel)
-        a = 0
-    
-    fileList = ["E:\project_data/apply\Plane\DEMfilt/" + "94184080_DEMfilt.las"]
-    filename = fileList[0]
-    BackProjection(filename, outImg)
+        #BackProjection(filename, outImg)

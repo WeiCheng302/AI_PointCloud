@@ -5,13 +5,13 @@ from os.path import basename
 from numba import njit
 import glob
 
-LAZhome = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\pointcloud"
+LAZhome = "E:/project_data/apply/Discussion/ZhiChang/Difficult/Raw"
 
 #lazname = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\pointcloud/97224090.las"
 #lazname = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\pointcloud/Building/96221008.las"
-lazname = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\pointcloud/Building/95183019.las"
+#lazname = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\pointcloud/Building/95183019.las"
 #lazname = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\pointcloud/96221024.las"
-out_LAZname = "D:\Point2IMG\Taiwan\TestFilter_0502/" + basename(lazname)[0:-4] + "_reclas_1_iter.las"
+#out_LAZname = "D:\Point2IMG\Taiwan\TestFilter_0502/" + basename(lazname)[0:-4] + "_reclas_1_iter.las"
 
 @njit(nogil= True)
 def Reliable_Ground_points(xp, yp, zp, classification, imgW, imgH):
@@ -180,17 +180,21 @@ def LasNoiseFilter(laz, out_LAZname, prior = 0.048):
 
 if __name__ == "__main__":
 
-    laz = ARSEMLaz.ReadLAZ(lazname)
-    LasNoiseFilter(laz, "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane/" + basename(lazname)[0:-4] + "_reclass.las")
+    filelist = glob.glob(LAZhome + '/*.las')
+    out_LAZname = "D:\Point2IMG\Taiwan\TestFilter_0502/" + basename(lazname)[0:-4] + "_reclas_1_iter.las"
+    for lazname in filelist:
+        laz = ARSEMLaz.ReadLAZ(lazname)
+
+        LasNoiseFilter(laz, "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane/" + basename(lazname)[0:-4] + "_reclass.las")
     
-    Ep, Np, Hp, classification = ARSEMLaz.GetLAZInfo_noInt(laz)
-    imgW, imgH, xymaxmin= ARSEMLaz.GetImgProjectionInfo(Ep, Np, Hp)
-    Ep, Np = ARSEMLaz.PointCloudShift(Ep, Np, xymaxmin[3], xymaxmin[4]) #[Emax, Nmax, Hmax, Emin, Nmin, Hmin]
+        Ep, Np, Hp, classification = ARSEMLaz.GetLAZInfo_noInt(laz)
+        imgW, imgH, xymaxmin= ARSEMLaz.GetImgProjectionInfo(Ep, Np, Hp)
+        Ep, Np = ARSEMLaz.PointCloudShift(Ep, Np, xymaxmin[3], xymaxmin[4]) #[Emax, Nmax, Hmax, Emin, Nmin, Hmin]
 
-    GP_Container_Actual = Reliable_Ground_points(Ep, Np, Hp, classification, imgW, imgH)        
-    Adj_elev_img = Elev_adjustment(GP_Container_Actual)
-    GPt_Container_possible = Possible_Ground_points(Ep, Np, Hp, Adj_elev_img)
-    Adj_elev_img_possible = Elev_adjustment(GPt_Container_possible)
-    classification = Ground_Points_Classify(Ep, Np, Hp, imgW, imgH, classification, Adj_elev_img_possible)
+        GP_Container_Actual = Reliable_Ground_points(Ep, Np, Hp, classification, imgW, imgH)        
+        Adj_elev_img = Elev_adjustment(GP_Container_Actual)
+        GPt_Container_possible = Possible_Ground_points(Ep, Np, Hp, Adj_elev_img)
+        Adj_elev_img_possible = Elev_adjustment(GPt_Container_possible)
+        classification = Ground_Points_Classify(Ep, Np, Hp, imgW, imgH, classification, Adj_elev_img_possible)
 
-    laz = ARSEMLaz.WriteLAZ(laz, Ep + xymaxmin[3], Np + xymaxmin[4], Hp, classification, out_LAZname)
+        laz = ARSEMLaz.WriteLAZ(laz, Ep + xymaxmin[3], Np + xymaxmin[4], Hp, classification, out_LAZname)

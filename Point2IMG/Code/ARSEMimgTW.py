@@ -197,6 +197,56 @@ def ClipPng_Border(Img, clipH, clipW):
 
     return subImgList, subImgidList, BorderImgList, BorderImgidList
 
+##Clip the image and keep the border
+def ClipPng_Border_Overlap(Img, clipH, clipW):
+
+    imgH, imgW = Img.shape
+
+    subImgList = []
+    subImgidList = []
+    BorderImgList = []
+    BorderImgidList = []
+
+    h = int(imgH/clipH)
+    w = int(imgW/clipW)
+    
+    for i in range(h + 1):
+        for j in range(w + 1):
+            if i != h and j != w :
+                subImg = Img [ clipH * i : clipH * (i + 1), clipW * j : clipW * (j + 1)]
+                subImgList.append(subImg)
+                subImgidList.append("_" + str(i) + "_" + str(j))
+
+                if i < (h-1) and j < (w-1) :
+                    subImg = Img [ int(clipH * (i + 0.5)) : int(clipH * (i + 1.5)), int(clipW * (j + 0.5)) : int(clipW * (j + 1.5))]
+                    subImgList.append(subImg)
+                    subImgidList.append("_" + str(i + 0.5) + "_" + str(j + 0.5))
+
+            elif i == h and j != w:
+                borderImg = Img [ imgH - clipH : imgH, clipW * j : clipW * (j + 1)]
+                BorderImgidList.append("_" + str(i) + "_" + str(j))
+                BorderImgList.append(borderImg)
+
+                borderImg = Img [ imgH - clipH : imgH, int(clipW * (j + 0.5)) : int(clipW * (j + 1.5))]
+                BorderImgidList.append("_" + str(i) + "_" + str(j + 0.5))
+                BorderImgList.append(borderImg)
+
+            elif i != h and j == w:
+                borderImg = Img [ clipH * i : clipH * (i + 1), imgW - clipW : imgW]
+                BorderImgidList.append("_" + str(i) + "_" + str(j))
+                BorderImgList.append(borderImg)
+
+                borderImg = Img [ int(clipH * (i + 0.5)) : int(clipH * (i + 1.5)), imgW - clipW : imgW]
+                BorderImgidList.append("_" + str(i + 0.5) + "_" + str(j))
+                BorderImgList.append(borderImg)
+
+            elif i == h and j == w: 
+                borderImg = Img[imgH - clipH : imgH, imgW - clipW : imgW]
+                BorderImgidList.append("_" + str(i) + "_" + str(j))
+                BorderImgList.append(borderImg)
+
+    return subImgList, subImgidList, BorderImgList, BorderImgidList
+
 def ClipTif_Border(Img, clipH, clipW):
     
     nbands, imgH, imgW = Img.shape
@@ -234,6 +284,62 @@ def ClipTif_Border(Img, clipH, clipW):
 
     return subImgList, subImgidList, BorderImgList, BorderImgidList
 
+
+def ClipTif_Border_Overlap(Img, clipH, clipW):
+    
+    nbands, imgH, imgW = Img.shape
+
+    subImgList = []
+    subImgidList = []
+    BorderImgList = []
+    BorderImgidList = []
+
+    h = int(imgH/clipH)
+    w = int(imgW/clipW) 
+    
+    for i in range(h + 1):
+        for j in range(w + 1):
+            if i != h and j != w :
+                for k in range(nbands):
+                    subImg = Img[k, clipH * i : clipH * (i + 1), clipW * j : clipW * (j + 1)]
+                    subImgList.append(subImg) 
+                    subImgidList.append("_" + str(i) + "_" + str(j))
+
+                for k in range(nbands):
+                    if i < (h-1) and j < (w-1) :
+                        subImg = Img[k, int(clipH * (i + 0.5)) : int(clipH * (i + 1.5)), int(clipW * (j + 0.5)) : int(clipW * (j + 1.5))]
+                        subImgList.append(subImg)
+                        subImgidList.append("_" + str(i + 0.5) + "_" + str(j + 0.5))
+
+            elif i == h and j != w:
+                for k in range(nbands):
+                    borderImg = Img[k, imgH - clipH : imgH, clipW * j : clipW * (j + 1)]
+                    BorderImgidList.append("_" + str(i) + "_" + str(j))
+                    BorderImgList.append(borderImg)
+
+                for k in range(nbands):
+                    borderImg = Img [k, imgH - clipH : imgH, int(clipW * (j + 0.5)) : int(clipW * (j + 1.5))]
+                    BorderImgidList.append("_" + str(i) + "_" + str(j + 0.5))
+                    BorderImgList.append(borderImg)
+
+            elif i != h and j == w:
+                for k in range(nbands):
+                    borderImg = Img[k, clipH * i : clipH * (i + 1), imgW - clipW : imgW]
+                    BorderImgidList.append("_" + str(i) + "_" + str(j))
+                    BorderImgList.append(borderImg)
+
+                for k in range(nbands):    
+                    borderImg = Img [k, int(clipH * (i + 0.5)) : int(clipH * (i + 1.5)), imgW - clipW : imgW]
+                    BorderImgidList.append("_" + str(i + 0.5) + "_" + str(j))
+                    BorderImgList.append(borderImg)
+
+            elif i == h and j == w: 
+                for k in range(nbands):
+                    borderImg = Img[k, imgH - clipH : imgH, imgW - clipW : imgW]
+                    BorderImgidList.append("_" + str(i) + "_" + str(j))
+                    BorderImgList.append(borderImg)
+
+    return subImgList, subImgidList, BorderImgList, BorderImgidList
 #Set Image pixel Value
 
 ##Set the image value but ignore the border
@@ -247,6 +353,107 @@ def SetImgValue(img, outImg, imgH, imgW, h, w, bands):
                 for layer in range(bands):
                     outImg[layer, h * imgH + row, w * imgW + column] = img[layer, row, column]
     return outImg
+
+def featImgCropper(featImg, cropH, cropW, stride):
+
+    bands = featImg.shape[0]
+    imgH = featImg.shape[1]
+    imgW = featImg.shape[2]
+
+    if (imgH % cropH)/2 >= cropH/2 : cropHcount = int(2 * ( imgH / cropH )) + 1
+    else : cropHcount = int(2 * ( imgH / cropH ))
+
+    if (imgW % cropW)/2 >= cropW/2 : cropWcount = int(2 * ( imgW / cropW )) + 1
+    else : cropWcount = int(2 * ( imgW / cropW ))
+
+    #croppedfeatList = np.zeros((cropHcount * cropWcount, bands, cropH, cropW))
+    croppedfeatList = []
+    locationList = np.zeros((2, cropHcount * cropWcount)) # 0 for h, 1 for w
+
+    for row in range(cropHcount):
+        for col in range(cropWcount):
+            if row == cropHcount - 1 and col == cropWcount - 1 : # Corner
+                cropfeat = featImg[:, imgH - 1 - cropH : imgH - 1, imgW - 1 - cropW : imgW - 1]                
+            elif row == cropHcount - 1 and col != cropWcount - 1 : # Horizontal
+                cropfeat = featImg[:,  imgH - 1 - cropH : imgH - 1, col * stride : col * stride + cropW]
+            elif row != cropHcount - 1 and col == cropWcount - 1 : # Vertical
+                cropfeat = featImg[:, row * stride : row * stride + cropH, imgW - 1 - cropW : imgW - 1]
+            else : 
+                cropfeat = featImg[:, row * stride : row * stride + cropH, col * stride : col * stride + cropW]
+
+            locationList[0, row * cropWcount + col] = row
+            locationList[1, row * cropWcount + col] = col
+            #croppedfeatList[row * cropWcount + col] = cropfeat  
+            croppedfeatList.append(cropfeat)  
+
+    imgInfo = np.array([bands, imgH, imgW, int(cropHcount - 1), int(cropWcount - 1), stride, cropH, cropW])
+
+    return locationList, croppedfeatList, imgInfo
+
+def featImgMerger(featTIFList, locationList, imgInfo):
+    out = np.zeros((imgInfo[0], imgInfo[1], imgInfo[2]))
+    #imgInfo：[0:b, 1:H, 2:W, 3:cropHcount, 4:cropWcount, 5:stride, 6:cropH, 7cropW]
+    imgH = imgInfo[1]
+    imgW = imgInfo[2]
+    cropHcount = imgInfo[3]
+    cropWcount = imgInfo[4]
+    stride = imgInfo[5]
+    cropH = imgInfo[6]
+    cropW = imgInfo[7]
+
+    for i, img in enumerate(featTIFList):
+
+        h = int(locationList[0, i])
+        w = int(locationList[1, i])
+        
+        if h == cropHcount and w == cropWcount: # Corner
+            out[:, imgH - 1 - cropH :  imgH - 1, imgW - 1 - cropW : imgW - 1] = img
+        elif h == cropHcount and w != cropWcount: # Horizonal Bottom
+            out[:, imgH - 1 - cropH : imgH - 1, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == cropWcount: # Vertical RSide
+            out[:, h * stride : (h * stride + cropH) , (imgW - 1 - cropW) : (imgW - 1)] = img
+        elif h == 0 and w != cropWcount: # Horizonal Top
+            out[:, 0 : cropH, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == 0: # Vertical LSide
+            out[:, h * stride : h * stride + cropH, 0 : cropW] = img
+        else : #Middle
+            middle = img[:, int(cropH * 0.25) : int(cropH * 0.75), int(cropW * 0.25) : int(cropW * 0.75)]
+            out[:, h * stride + int(cropH * 0.25) : h * stride + + int(cropH * 0.75), w * stride + int(cropW * 0.25) : w * stride + int(cropW * 0.75)] = middle
+        
+    return out
+
+def LabelImgMerger(featpngList, locationList, imgInfo):
+    out = np.zeros((1, imgInfo[1], imgInfo[2]))
+    #imgInfo：[0:b, 1:H, 2:W, 3:cropHcount, 4:cropWcount, 5:stride, 6:cropH, 7cropW]
+    imgH = imgInfo[1]
+    imgW = imgInfo[2]
+    cropHcount = imgInfo[3]
+    cropWcount = imgInfo[4]
+    stride = imgInfo[5]
+    cropH = imgInfo[6]
+    cropW = imgInfo[7]
+
+    for i, img in enumerate(featpngList):
+
+        h = int(locationList[0, i])
+        w = int(locationList[1, i])
+        img = np.moveaxis(img, 2, 0)
+        
+        if h == cropHcount and w == cropWcount: # Corner
+            out[0, imgH - 1 - cropH :  imgH - 1, imgW - 1 - cropW : imgW - 1] = img
+        elif h == cropHcount and w != cropWcount: # Horizonal Bottom
+            out[0, imgH - 1 - cropH : imgH - 1, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == cropWcount: # Vertical RSide
+            out[0, h * stride : (h * stride + cropH) , (imgW - 1 - cropW) : (imgW - 1)] = img
+        elif h == 0 and w != cropWcount: # Horizonal Top
+            out[0, 0 : cropH, w * stride : w * stride + cropW] = img
+        elif h != cropHcount and w == 0: # Vertical LSide
+            out[0, h * stride : h * stride + cropH, 0 : cropW] = img
+        else : #Middle
+            middle = img[:, int(cropH * 0.25) : int(cropH * 0.75), int(cropW * 0.25) : int(cropW * 0.75)]
+            out[0, h * stride + int(cropH * 0.25) : h * stride + + int(cropH * 0.75), w * stride + int(cropW * 0.25) : w * stride + int(cropW * 0.75)] = middle
+        
+    return out
 
 ##Set the image value of the border
 @njit(nogil= True)
@@ -307,6 +514,44 @@ def PointCloudProjection(train, label, xArr, yArr, zArr, intensityArr, classArr,
     print("Image Value Sucessfully Set")
     return train, label
 
+@njit(nogil=True)
+def PointCloudProjection_2m(train, label, xArr, yArr, zArr, intensityArr, classArr, groundLabel = 2, nongroundLabel = 0):
+
+    imgH = train.shape[1] - 1
+
+    for i in range(len(xArr)):
+
+        if yArr[i] == train.shape[1] or xArr[i] == train.shape[2] : continue
+    
+        pixclass = classArr[i]  
+
+        if zArr[i] < train[0, imgH - int(yArr[i]/2), int(xArr[i]/2)]:
+            train[0, imgH - int(yArr[i]/2), int(xArr[i]/2)] = zArr[i]
+            train[1, imgH - int(yArr[i]/2), int(xArr[i]/2)] = intensityArr[i]
+            if pixclass == 0 or pixclass == 1 or pixclass == 2 : label[0, imgH - int(yArr[i]/2), int(xArr[i]/2)] = groundLabel
+            elif pixclass == 6 or pixclass == 9 or pixclass == 31 : label[0, imgH - int(yArr[i]/2), int(xArr[i]/2)] = nongroundLabel
+    print("Image Value Sucessfully Set")
+    return train, label
+
+@njit(nogil=True)
+def PointCloudProjection_noInt(train, label, xArr, yArr, zArr, intensityArr, classArr, groundLabel = 2, nongroundLabel = 0):
+
+    imgH = train.shape[1] - 1
+
+    for i in range(len(xArr)):
+
+        if yArr[i] == train.shape[1] or xArr[i] == train.shape[2] : continue
+    
+        pixclass = classArr[i]  
+
+        if zArr[i] < train[0, imgH - int(yArr[i]), int(xArr[i])]:
+            train[0, imgH - int(yArr[i]), int(xArr[i])] = zArr[i]
+            #train[1, imgH - int(yArr[i]), int(xArr[i])] = intensityArr[i]
+            if pixclass == 0 or pixclass == 1 or pixclass == 2 : label[0, imgH - int(yArr[i]), int(xArr[i])] = groundLabel
+            elif pixclass == 6 or pixclass == 9 or pixclass == 31 : label[0, imgH - int(yArr[i]), int(xArr[i])] = nongroundLabel
+    print("Image Value Sucessfully Set")
+    return train, label
+
 ##Projecting the lowest elevation to the image
 @njit(nogil= True, parallel = False)
 def CreateMinImgTW(xp, yp, zp, xMin, yMin, minImg):
@@ -314,9 +559,20 @@ def CreateMinImgTW(xp, yp, zp, xMin, yMin, minImg):
     imgH = minImg.shape[1] - 1
     
     for i in range(len(xp)):
-        a = xp[i]
         if zp[i] < minImg[0, imgH - int(yp[i] - yMin), int(xp[i] - xMin)] : 
             minImg[0, imgH - int(yp[i] - yMin), int(xp[i] - xMin)] = zp[i]
+
+    return minImg
+
+
+@njit(nogil= True, parallel = False)
+def CreateMinImgTW_2m(xp, yp, zp, xMin, yMin, minImg):
+
+    imgH = minImg.shape[1] - 1
+    
+    for i in range(len(xp)):
+        if zp[i] < minImg[0, imgH - int((yp[i] - yMin)/2), int((xp[i] - xMin)/2)] : 
+            minImg[0, imgH - int((yp[i] - yMin)/2), int((xp[i] - xMin)/2)] = zp[i]
 
     return minImg
 
@@ -411,6 +667,61 @@ def AdaptiveBilinearInterpolation(featimg, classimg):
                     #if out_featimg[band, row, col] > 50 or out_featimg[band, row, col]< 0.001 : print(band, row, col, out_featimg[band, row, col])
 
     return out_featimg
+
+@njit(nogil= True)
+def AdaptiveBilinearInterpolation_and_featAdj(featimg, classimg, waterImg, wInfoList, xymaxmin):
+    out_featimg = featimg.copy()
+    out_classimg = classimg.copy()
+    bands = featimg.shape[0]
+    imgH = featimg.shape[1]
+    imgW = featimg.shape[2]
+    
+    for row in range(imgH):
+        for col in range(imgW):
+            modified = False
+
+            if classimg[row, col] == 1 and modified == False :
+                #Water Check, Adjust Label if is missing value and not water
+                offx = int(wInfoList[2] - xymaxmin[3])
+                offy = int(xymaxmin[1] - wInfoList[3])
+                    
+                if 0 < (row - offy) < wInfoList[0] :
+                    if 0 < (col - offx) < wInfoList[1] :
+                        if waterImg[(row - offy), (col - offx)] != 1:
+                            if row != 0 and row < imgH - 3 and col != 0 and col < imgW - 3:
+                                m = classimg[row - 1 : row + 2, col - 1 : col + 2]
+                                out_classimg[row, col] = np.argmax(np.bincount(np.array([m[0, 0], m[0, 1], m[0, 2], m[1, 0], m[1, 1], m[1, 2], m[2, 0], m[2, 1], m[2, 2]] )))
+                                modified = True
+
+                if not modified:
+                    if row != 0 and row < imgH - 3 and col != 0 and col < imgW - 3:
+                        m = classimg[row - 1 : row + 2, col - 1 : col + 2]
+                        out_classimg[row, col] = np.argmax(np.bincount(np.array([m[0, 0], m[0, 1], m[0, 2], m[1, 0], m[1, 1], m[1, 2], m[2, 0], m[2, 1], m[2, 2]] )))
+
+            for band in range(bands):
+                # Get the items to interpolate 
+                if classimg[row, col] == 1:
+                    intp_row, intp_col, intp_pixvalue = GetBilinearElement(featimg[band], classimg, row, col)
+                    out_featimg[band, row, col] = BilinearInterpolation(row, col, intp_row, intp_col, intp_pixvalue)
+                    
+    return out_featimg, out_classimg
+
+@njit(nogil= True)
+def AdaptiveBilinearInterpolation_1Band(featimg, classimg):
+    out_featimg = featimg.copy()
+    bands = featimg.shape[0]
+    imgH = featimg.shape[1]
+    imgW = featimg.shape[2]
+    for band in range(1):
+        for row in range(imgH):
+            for col in range(imgW):
+                if classimg[row, col] == 1:
+                    # Get the items to interpolate 
+                    intp_row, intp_col, intp_pixvalue = GetBilinearElement(featimg[band], classimg, row, col)
+                    out_featimg[band, row, col] = BilinearInterpolation(row, col, intp_row, intp_col, intp_pixvalue)
+                    #if out_featimg[band, row, col] > 50 or out_featimg[band, row, col]< 0.001 : print(band, row, col, out_featimg[band, row, col])
+
+    return out_featimg    
 
 @njit(nogil= True)
 def GetBilinearElement(featimg, classimg, row, col):

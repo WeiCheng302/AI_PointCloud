@@ -153,6 +153,150 @@ def ClassifyPointsTW(xp, yp, zp, minImg, classimg, classification, xmin, ymin, t
 
     return classification, CF_Matrix, notice
 
+#@njit(nogil= True, parallel = False)
+def ClassifyPointsTW_2m(xp, yp, zp, minImg, classimg, classification, xmin, ymin, thres, sigma):
+    CF_Matrix = np.zeros(4) #GG, G  #TP, TN, FP, FN
+    notice = "#TP, TN, FP, FN \n " + str(len(classification[classification==2])) + "  " + str(len(classification[classification==31])) + "\n"
+    
+    imgH = minImg.shape[1] - 1
+
+    for i in range(len(xp)):            
+        cl_point = classification[i]
+        # If the point is predicted as a ground point and located within the std, 
+        # classify as the ground points.
+
+        if classimg[imgH - int((yp[i] - ymin)/2), int((xp[i] - xmin)/2)] == 2: # IsGround 
+
+            # If InPrecision
+            if (zp[i] - minImg[0, imgH - int((yp[i] - ymin)/2), int((xp[i] - xmin)/2)]) <= thres * sigma : # Positive
+
+                if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[0] += 1 # TP
+                else : CF_Matrix[2] += 1 # FP
+                
+                classification[i] = 2 #Ground
+
+            # If not InPrecision    
+            else : # Negative
+                
+                if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN
+                else : CF_Matrix[1] += 1 # TN
+
+                classification[i] = 31 # Non-Ground
+
+        elif classimg[imgH - int((yp[i] - ymin)/2), int((xp[i] - xmin)/2)] == 0: # not IsGround 
+
+            if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN
+            else : CF_Matrix[1] += 1 # TN
+
+            classification[i] = 31 # Non-Ground
+
+        else : # Classified to Missing Value # Negative
+
+            if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN 
+            else : CF_Matrix[3] += 1 # FN
+
+            classification[i] = 31 #Non-Ground
+
+    return classification, CF_Matrix, notice
+
+@njit(nogil= True, parallel = False)
+def ClassifyPointsTWConf_2m(xp, yp, zp, minImg, classimg, probImg, classification, xmin, ymin, thres, sigma):
+    CF_Matrix = np.zeros(4) #GG, NGG, GNG, NGNG
+    notice = "#TP, TN, FP, FN \n " + str(len(classification[classification==2])) + "  " + str(len(classification[classification==31])) + "\n"
+    
+    imgH = minImg.shape[1] - 1
+    probability = np.zeros(len(classification))
+
+    for i in range(len(xp)):            
+        cl_point = classification[i]
+        # classification_out = np.zeros(len(classification))
+        # If the point is predicted as a ground point and located within the std, 
+        # classify as the ground points.
+        if classimg[imgH - int((yp[i] - ymin)/2), int((xp[i] - 0.0000001 - xmin)/2)] == 2: # IsGround 
+
+            # If InPrecision
+            if (zp[i] - minImg[0, imgH - int((yp[i] - ymin)/2), int((xp[i] - 0.0000001 - xmin)/2)]) <= thres * sigma : # Positive
+
+                if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[0] += 1 # GG
+                else : CF_Matrix[1] += 1 # NGG
+                
+                classification[i] = 2 #Ground
+                probability[i] = probImg[0, imgH - int((yp[i] - ymin)/2), int((xp[i] - 0.0000001 - xmin)/2)]
+
+            # If not InPrecision    
+            else : # Negative
+                # Confidence is not given to this category
+                if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[2] += 1 # GNG
+                else : CF_Matrix[3] += 1 # NGNG
+
+                classification[i] = 31 # Non-Ground
+
+        elif classimg[imgH - int((yp[i] - ymin)/2), int((xp[i] - 0.0000001 - xmin)/2)] == 0: # not IsGround 
+
+            if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[2] += 1 # GNG
+            else : CF_Matrix[3] += 1 # NGNG
+
+            classification[i] = 31 # Non-Ground
+            probability[i] = probImg[0, imgH - int((yp[i] - ymin)/2), int((xp[i] - 0.0000001 - xmin)/2)]
+
+        else : # Classified to Missing Value # Negative
+
+            if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN 
+            else : CF_Matrix[3] += 1 # FN
+
+            classification[i] = 31 #Non-Ground
+
+    return classification, probability, CF_Matrix, notice
+
+@njit(nogil= True, parallel = False)
+def ClassifyPointsTWConf(xp, yp, zp, minImg, classimg, probImg, classification, xmin, ymin, thres, sigma):
+    CF_Matrix = np.zeros(4) #GG, G  #TP, TN, FP, FN
+    notice = "#TP, TN, FP, FN \n " + str(len(classification[classification==2])) + "  " + str(len(classification[classification==31])) + "\n"
+    
+    imgH = minImg.shape[1] - 1
+    probability = np.zeros(len(classification))
+
+    for i in range(len(xp)):            
+        cl_point = classification[i]
+        # classification_out = np.zeros(len(classification))
+        # If the point is predicted as a ground point and located within the std, 
+        # classify as the ground points.
+
+        if classimg[imgH - int(yp[i] - ymin), int(xp[i] - xmin)] == 2: # IsGround 
+
+            # If InPrecision
+            if (zp[i] - minImg[0, imgH - int(yp[i] - ymin), int(xp[i] - xmin)]) <= thres * sigma : # Positive
+
+                if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[0] += 1 # TP
+                else : CF_Matrix[2] += 1 # FP
+                
+                classification[i] = 2 #Ground
+                probability[i] = probImg[0, imgH - int(yp[i] - ymin), int(xp[i] - xmin)]
+
+            # If not InPrecision    
+            else : # Negative
+                # Confidence is not given to this category
+                if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN
+                else : CF_Matrix[1] += 1 # TN
+
+                classification[i] = 31 # Non-Ground
+
+        elif classimg[imgH - int(yp[i] - ymin), int(xp[i] - xmin)] == 0: # not IsGround 
+
+            if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN
+            else : CF_Matrix[1] += 1 # TN
+
+            classification[i] = 31 # Non-Ground
+            probability[i] = probImg[0, imgH - int(yp[i] - ymin), int(xp[i] - xmin)]
+
+        else : # Classified to Missing Value # Negative
+
+            if cl_point == 0 or cl_point == 1 or cl_point == 2 : CF_Matrix[3] += 1 # FN 
+            else : CF_Matrix[3] += 1 # FN
+
+            classification[i] = 31 #Non-Ground
+
+    return classification, probability, CF_Matrix, notice
 
 @njit(nogil= True, parallel = False)
 def ClassifyPoints(xp, yp, zp, minImg, classimg, classification, xmin, ymin, thres, sigma):

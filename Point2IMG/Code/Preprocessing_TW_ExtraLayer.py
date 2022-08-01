@@ -1,3 +1,4 @@
+from dis import dis
 from multiprocessing.connection import wait
 import os
 import time
@@ -12,8 +13,8 @@ from osgeo import gdal
 from DEMFilter import LasNoiseFilter
 #from AfterProcessing import MergeImg
 
-LAZhome = "E:\project_data/apply\GroundObject/Forest"   #City #LowVeg #Forest
-mother_folder = "D:\Point2IMG\Taiwan/Test_Morphology"
+LAZhome = "E:\project_data/apply\Plane\DEMfilt"
+mother_folder = "D:\Point2IMG\Taiwan/0630_Extra_Layer/"
 
 water_folder = "D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\waterlineTIF_105_110/"
 
@@ -25,8 +26,8 @@ fillin = 9999
 Folder_UnClipped = mother_folder + "/UnClipped_Img/"
 Folder_UnClippedPng = mother_folder + "/UnClipped_Png/"
 
-Folder_UnClippedLabel_All = mother_folder + "/UnClipped_Png_All/"
-Folder_UnClippedtrain_All = mother_folder + "/UnClipped_Img_All/"
+Folder_UnClippedLabel_All = mother_folder + "UnClipped_Png_All/"
+Folder_UnClippedtrain_All = mother_folder + "UnClipped_Img_All/"
 
 FolderTif_Train = mother_folder + "/Train_Img/"
 FolderPng_Train = mother_folder + "/Train_Label/"
@@ -57,6 +58,43 @@ def CheckBorder(value, masksize, thres):
     return outValueMinus, outValuePosit
 
 @njit(nogil= True)
+def RegionPlane(array):
+    #The definition of the center should be improved
+
+    A = np.ones((array.shape[0]*array.shape[1],3))
+    L = np.zeros((array.shape[0]*array.shape[1],1))
+    A2 = np.ones((array.shape[0]*array.shape[1],3))
+    L2 = np.zeros((array.shape[0]*array.shape[1],1))
+
+    for row in range(array.shape[0]):
+        for col in range(array.shape[1]):
+            idx = row * array.shape[1] + col
+            A[idx, 0] = row
+            A[idx, 1] = col
+            L[idx, 0] = array[row, col]
+
+    X = np.linalg.inv(A.transpose().dot(A)).dot(A.transpose().dot(L))
+    V = A.dot(X) - L
+    sigma0 = np.sqrt(V.transpose().dot(V) / (len(V) - 3))
+
+    V_in2sigma = np.where(np.absolute(V)< 2*sigma0)    
+    for i in V_in2sigma:
+        L2[i] = V[i]
+        A2[i, :] = A[i, :]
+
+    # for i in range(len(V)):
+    #     if np.absolute(V)> 2*sigma0 :
+    #         V = np.delete(V, i)
+    #         A = np.delete(A, [i], 0)
+
+    X2 = np.linalg.inv(A2.transpose().dot(A2)).dot(A2.transpose().dot(L2))
+
+    distance = np.absolute(X2[0] * int(array.shape[0]/2) + X2[1] * int(array.shape[1]/2) + X2[2] - array[int(array.shape[0]/2), int(array.shape[1]/2)])
+    distance = distance / np.sqrt(X2[0]*X2[0] + X2[1]*X2[1] + X2[2]*X2[2])
+
+    return distance[0]
+
+@njit(nogil= True)
 def RegionMin_and_WaterCover(imgH, imgW, img, classimg, xymaxmin, waterImg, wInfoList, fillin, water=False):
 
     ori = img.copy()
@@ -64,43 +102,67 @@ def RegionMin_and_WaterCover(imgH, imgW, img, classimg, xymaxmin, waterImg, wInf
     for row in range(imgH):
         for col in range(imgW):
 
-            # 3rd Band
-            ULrow, BRrow = CheckBorder(row, 20, imgH)
-            ULcol, BRcol = CheckBorder(col, 20, imgW)
-            min = np.min(ori[0, ULrow:BRrow, ULcol:BRcol])
+            ULrow, BRrow = CheckBorder(row, 3, imgH)
+            ULcol, BRcol = CheckBorder(col, 3, imgW)
+            window_3 = ori[0, ULrow:BRrow, ULcol:BRcol]   
+            min = np.min(window_3)
 
-            if ori[0, row, col] != fillin : img[2, row, col] = ori[0, row, col] - min
+            # 2nd Band # Local Diff 3  
+            img[1, row, col] = ori[0, row, col] - min
+            # 3rd Band # std 3
+            img[2, row, col] = np.std(window_3)
+            # 4th Band # Max 3
+            img[3, row, col] = np.max(window_3)
+            # 5th Band # Min 3
+            img[4, row, col] = min
+            # 6th Band # Mean 3
+            img[5, row, col] = np.average(window_3)
+            # 7th Band # Local Plane 3
+            img[6, row, col] = RegionPlane(window_3)
             
-            # 4th Band
-            # ULrow, BRrow = CheckBorder(row, 3, imgH)
-            # ULcol, BRcol = CheckBorder(col, 3, imgW)
-            # min = np.min(ori[0, ULrow:BRrow, ULcol:BRcol])
+            ULrow, BRrow = CheckBorder(row, 10, imgH)
+            ULcol, BRcol = CheckBorder(col, 10, imgW)
+            window_10 = ori[0, ULrow:BRrow, ULcol:BRcol]   
+            min = np.min(window_10)
 
-            # if ori[0, row, col] != fillin : img[3, row, col] = ori[0, row, col] - min
+            # 8th Band #Local Diff 10
+            img[7, row, col] = ori[0, row, col] - min  
+            # 9th Band #std 10
+            img[8, row, col] = np.std(window_10)
+            # 10th Band #Max 10
+            img[9, row, col] = np.max(window_10)
+            # 11th Band #Min 10
+            img[10, row, col] = min
+            # 12th Band #Mean 10
+            img[11, row, col] = np.average(window_10)
+            # 13th Band #Local Plane 10  
+            img[12, row, col] = RegionPlane(window_10)
 
-            # 5th Band
-            # ULrow, BRrow = CheckBorder(row, 50, imgH)
-            # ULcol, BRcol = CheckBorder(col, 50, imgW)
-            # min = np.min(ori[0, ULrow:BRrow, ULcol:BRcol])
+            ULrow, BRrow = CheckBorder(row, 50, imgH)
+            ULcol, BRcol = CheckBorder(col, 50, imgW)
+            window_50 = ori[0, ULrow:BRrow, ULcol:BRcol]
+            min = np.min(window_50)
 
-            # if ori[0, row, col] != fillin : img[4, row, col] = ori[0, row, col] - min
-
-            # Unused Band
-            #if img[0, row, col] != fillin : img[3, row, col] = 1
-            #else : img[3, row, col] = 0
-
-            #if img[0, row, col] == fillin : img[:, row, col] = -0.1   
-            #if classimg[0, row, col] == fillin : classimg[0, row, col] = 1
+            # 14th Band #Local Diff 50
+            img[13, row, col] = ori[0, row, col] - min
+            # 15th Band #std 50
+            img[14, row, col] = np.std(window_50)
+            # 16th Band #Max 50
+            img[15, row, col] = np.max(window_50)
+            # 17th Band #Min 50
+            img[16, row, col] = min
+            # 18th Band #Mean 50
+            img[17, row, col] = np.average(window_50)
+            # 19th Band #Local Plane 50  
+            img[18, row, col] = RegionPlane(window_50)
 
             #Water Check
-            #if water: 
             offx = int(wInfoList[2] - xymaxmin[3])
             offy = int(xymaxmin[1] - wInfoList[3])
                 
             if 0 < (row - offy) < wInfoList[0] :
                 if 0 < (col - offx) < wInfoList[1] :
                     if waterImg[(row - offy), (col - offx)] == 1:
-                        #img[:, row, col] = -0.1
                         classimg[0, row, col] = 1
 
     return img, classimg
@@ -150,18 +212,19 @@ def LAZtoIMG(LAZname, TrainImgName, LabelImgName, NoiseFilt = False):
     print("    Setting Image")
     # img = ARSEMimg.CreateImgArray(imgH, imgW, 3, np.float32) + fillin
     # classimg = ARSEMimg.CreateImgArray(imgH, imgW, 1, np.uint8) + fillin
-    img = np.zeros((3, imgH, imgW), dtype=np.float32) + fillin
+    #img = np.zeros((3, imgH, imgW), dtype=np.float32) + fillin
+    img = np.zeros((19, imgH, imgW), dtype=np.float32) + fillin
     classimg = np.ones((1, imgH, imgW), dtype=np.uint8)
 
     print("To 0")
-    img, classimg = ARSEMimg.PointCloudProjection(img, classimg, xp, yp, zp, intensity, classification)
+    img, classimg = ARSEMimg.PointCloudProjection_noInt(img, classimg, xp, yp, zp, intensity, classification)
 
+    print("    Interpolating")
+    img = ARSEMimg.AdaptiveBilinearInterpolation_1Band(img, classimg[0])
+    
     print("    Filling")
     img, classimg = RegionMin_and_WaterCover(imgH, imgW, img, classimg, np.array(xymaxmin), waterImg, waterInfoList, fillin, water)
-    
-    print("    Interpolating")
-    #img = ARSEMimg.AdaptiveBilinearInterpolation(img, classimg[0])
-    img, classimg = ARSEMimg.AdaptiveBilinearInterpolation_and_featAdj(img, classimg[0], waterImg, waterInfoList, xymaxmin)
+        
     # mean0 = (img[0, :, :][img[0, :, :] != -0.1]).mean()
     # mean1 = (img[1, :, :][img[1, :, :] != -0.1]).mean()
     # mean2 = (img[2, :, :][img[2, :, :] != -0.1]).mean()
@@ -181,7 +244,7 @@ def LAZtoIMG(LAZname, TrainImgName, LabelImgName, NoiseFilt = False):
     print("    TIFF Sucessfully Saved")
 
     #ARSEMimg.SaveTiff_1inp(LabelImgName, classimg, 0)
-    ARSEMimg.SavePNG(LabelImgName, classimg)
+    ARSEMimg.SavePNG(LabelImgName, classimg[0])
     print("    PNG Sucessfully Saved")
 
     print("Number of 0 : " + str(len(classimg[classimg == 0])))
@@ -202,8 +265,8 @@ def ImageClip(img, classimg, LAZname):
     bands = Tiff.shape[0]
 
     print("Clipping")
-    TiffList, TiffIDList, BTiffList, BTiffIDList = ARSEMimg.ClipTif_Border_Overlap(Tiff, ClipH, ClipW)
-    PngList, PngIDList, BPngList, BPngIDList = ARSEMimg.ClipPng_Border_Overlap(Png, ClipH, ClipW)
+    TiffList, TiffIDList, BTiffList, BTiffIDList = ARSEMimg.ClipTif_Border(Tiff, ClipH, ClipW)
+    PngList, PngIDList, BPngList, BPngIDList = ARSEMimg.ClipPng_Border(Png, ClipH, ClipW)
 
     outImgName = basename(LAZname)[0:-4]
 
@@ -222,36 +285,36 @@ def ImageClip(img, classimg, LAZname):
         ARSEMimg.SavePNG(FolderPng_Border + outImgName + BPngIDList[i] + ".png", BPngList[i])
         #ARSEMimg.SaveTiff_ninp(FolderPng_Border + outImgName + BPngIDList[i] + ".png", BPngList, i, 1, 0)
 
-# def Seperate_Data(train_ratio = 0.8, val_ratio = 0.2, test_ratio = 0):
+def Seperate_Data(train_ratio = 0.8, val_ratio = 0.2, test_ratio = 0):
 
-#     assert train_ratio + val_ratio + test_ratio == 1, "Sum of the ratios should be 1."
+    assert train_ratio + val_ratio + test_ratio == 1, "Sum of the ratios should be 1."
 
-#     #FileInFolderTif = np.random.permutation(glob.glob(FolderTif_All + "*.tif"))
-#     FileInFolderLabel = np.random.permutation(glob.glob(FolderPng_All + "*.png"))
+    #FileInFolderTif = np.random.permutation(glob.glob(FolderTif_All + "*.tif"))
+    FileInFolderLabel = np.random.permutation(glob.glob(FolderPng_All + "*.png"))
 
-#     print("Copying")
-#     lenList = (len(FileInFolderLabel))
+    print("Copying")
+    lenList = (len(FileInFolderLabel))
 
-#     #Training
-#     print("    Saving Training Images")
-#     for i in range(int(lenList * train_ratio)):
-#         pngname = basename(FileInFolderLabel[i])
-#         shutil.copyfile(FolderTif_All + pngname[0:-4] + ".tif" ,FolderTif_Train + pngname[0:-4] + ".tif")
-#         shutil.copyfile(FileInFolderLabel[i] ,FolderPng_Train + pngname)
+    #Training
+    print("    Saving Training Images")
+    for i in range(int(lenList * train_ratio)):
+        pngname = basename(FileInFolderLabel[i])
+        shutil.copyfile(FolderTif_All + pngname[0:-4] + ".tif" ,FolderTif_Train + pngname[0:-4] + ".tif")
+        shutil.copyfile(FileInFolderLabel[i] ,FolderPng_Train + pngname)
         
-#     #Validation
-#     print("    Saving Validation Images")
-#     for i in range(int(lenList * train_ratio), int(lenList * (train_ratio + val_ratio))):
-#         pngname = basename(FileInFolderLabel[i])
-#         shutil.copyfile(FolderTif_All + pngname[0:-4] + ".tif" ,FolderTif_Val + pngname[0:-4] + ".tif")
-#         shutil.copyfile(FileInFolderLabel[i] ,FolderPng_Val + pngname)
+    #Validation
+    print("    Saving Validation Images")
+    for i in range(int(lenList * train_ratio), int(lenList * (train_ratio + val_ratio))):
+        pngname = basename(FileInFolderLabel[i])
+        shutil.copyfile(FolderTif_All + pngname[0:-4] + ".tif" ,FolderTif_Val + pngname[0:-4] + ".tif")
+        shutil.copyfile(FileInFolderLabel[i] ,FolderPng_Val + pngname)
 
-#     #Testing
-#     print("    Saving Testing Images")
-#     for i in range(int(lenList * (train_ratio + val_ratio)), lenList):
-#         pngname = basename(FileInFolderLabel[i])
-#         shutil.copyfile(FolderTif_All + pngname[0:-4] + ".tif" ,FolderTif_Test + pngname[0:-4] + ".tif")
-#         shutil.copyfile(FileInFolderLabel[i] ,FolderPng_Test + pngname)        
+    #Testing
+    print("    Saving Testing Images")
+    for i in range(int(lenList * (train_ratio + val_ratio)), lenList):
+        pngname = basename(FileInFolderLabel[i])
+        shutil.copyfile(FolderTif_All + pngname[0:-4] + ".tif" ,FolderTif_Test + pngname[0:-4] + ".tif")
+        shutil.copyfile(FileInFolderLabel[i] ,FolderPng_Test + pngname)        
 
 if __name__ == "__main__":
 
@@ -263,24 +326,21 @@ if __name__ == "__main__":
 
     for LAZname in Lazfile:
         print("Now Processing : " + LAZname)
-        
         #if basename(LAZname)[:8] not in ['94181061', '95203004'] :continue
         if (basename(LAZname)[:8] in exclude) or ( (basename(LAZname)[:-4] + ".png") in exist):
             print("Skip " + LAZname)
             continue
-
         TrainImgName = Folder_UnClipped + basename(LAZname)[0:-4] + ".tif"
         LabelImgName = Folder_UnClippedPng + basename(LAZname)[0:-4] + ".png"
 
-        TrainImgName_All = Folder_UnClippedtrain_All + basename(LAZname)[0:-4] + ".tif"
-        LabelImgName_All = Folder_UnClippedLabel_All + basename(LAZname)[0:-4] + ".png"
-
         img, classimg = LAZtoIMG(LAZname, TrainImgName, LabelImgName, NoiseFilt = False)
-        shutil.copyfile(TrainImgName, TrainImgName_All)
-        shutil.copyfile(LabelImgName, LabelImgName_All)
+
+        TrainImgName = Folder_UnClippedtrain_All + basename(LAZname)[0:-4] + ".tif"
+        LabelImgName = Folder_UnClippedLabel_All + basename(LAZname)[0:-4] + ".png"
 
         #classimg = classimg.reshape(1, classimg.shape[0], classimg.shape[1])
-        #ImageClip(img, classimg, LAZname)
+
+        ImageClip(img, classimg, LAZname)
 
     #Seperate_Data(train_ratio = 0.8, val_ratio = 0.2, test_ratio = 0)
     #MergeImg(LAZname, FolderPng_All, mother_folder)
