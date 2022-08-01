@@ -52,11 +52,11 @@ class CheckpointsCallback(Callback):
 import json
 import os
 
-from keras_segmentation.data_utils.data_loader import image_segmentation_generator, random_img_seg_generator_pre_read, random_img_seg_generator_pre_read_multi, \
+from keras_segmentation_mod.data_utils.data_loader import image_segmentation_generator, random_img_seg_generator_pre_read, random_img_seg_generator_pre_read_multi, \
     verify_segmentation_dataset, random_img_seg_generator, read_all_imgs
 from tensorflow.keras.backend import binary_crossentropy
 from tensorflow.python import framework, ops
-from keras_segmentation.models.all_models import model_from_name
+from keras_segmentation_mod.models.all_models import model_from_name
 import six
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import ModelCheckpoint
@@ -65,17 +65,17 @@ import keras.backend as backend
 backend.clear_session()
 
 #GPU Setting
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-  try:
-    # Currently, memory growth needs to be the same across GPUs
-    for gpu in gpus:
-      tf.config.experimental.set_memory_growth(gpu, True)
-    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-  except RuntimeError as e:
-    # Memory growth must be set before GPUs have been initialized
-    print(e)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#   try:
+#     # Currently, memory growth needs to be the same across GPUs
+#     for gpu in gpus:
+#       tf.config.experimental.set_memory_growth(gpu, True)
+#     logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+#     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+#   except RuntimeError as e:
+#     # Memory growth must be set before GPUs have been initialized
+#     print(e)
 
 import matplotlib.pyplot as plt
 import glob
@@ -95,17 +95,17 @@ checkpoints_path = "D:/image-segmentation-keras/0630_GPU/CheckPoints/_0630_TW_GP
 Model_Path = "D:/image-segmentation-keras/0630_GPU/Model/_0630_TW_GPU_Hill_3lyr_MBunet_BCE_Interpolation_demPrepro_RD_Adam.h5"
 motherfolder = "D:\Point2IMG\Taiwan/0630_GPU/"
 
-input_size = (256, 256, 3)
-filter_num = [64, 128, 256]
+input_size = (128, 128, 3)
+filter_num = [32, 64, 128] #[64, 128, 256]
 n_classes = 1
 #==== Default Parameter ====#
 stack_num_down=2
 stack_num_up=2
 activation='ReLU'
-embed_dim = 128
-num_mlp = 128
-num_heads = 3
-num_transformer = 3
+embed_dim = 768
+num_mlp = 1
+num_heads = 12
+num_transformer = 12
 mlp_activation = 'GELU'
 output_activation = 'Softmax'
 batch_norm=False
@@ -122,7 +122,7 @@ train_images = motherfolder + "UnClipped_Img"
 train_annotations = motherfolder + "UnClipped_Png"
 
 epochs = 400
-batch_size = 1
+batch_size = 24
 
 validate = True
 val_images = motherfolder + "Val_Img"

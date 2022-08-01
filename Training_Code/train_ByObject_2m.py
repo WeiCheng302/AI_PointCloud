@@ -37,7 +37,7 @@ class LossHistory(Callback):
 
             i = 0
             for bat in val_gen.gi_frame.f_locals['Y']:
-                imageio.imwrite(motherfolder + 'Batch/' + epoc + batc + maxLoss + str(i) + '.png', (bat*255).reshape(256, 256).astype(np.uint8))
+                imageio.imwrite(BatchRoute + epoc + batc + maxLoss + str(i) + '.png', (bat*255).reshape(512, 512).astype(np.uint8))
                 i += 1
 
     def on_train_batch_begin(self, batch, logs={}):
@@ -94,8 +94,9 @@ import six
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
 import keras.backend as backend
+from tensorflow.keras.optimizers import Adam
+
 backend.clear_session()
 
 #GPU Setting
@@ -128,29 +129,34 @@ BinaryCrossEntropy = True
 ignore_zero_class = True
 
 #model = "mobilenet_segnet"
-#model = "mobilenet_segnet_deep"
 model = 'mobilenet_unet'
-#model = 'unet'
-#model = 'resnet50_segnet'
+#model = 'mobilenet_unet_Deep'
 
-checkpoints_path = "D:/image-segmentation-keras/0715_512/CheckPoints/_0715_TW_LowVeg_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
-Model_Path = "D:/image-segmentation-keras/0715_512/Model/_0715_TW_LowVeg_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam.h5"
-motherfolder = "D:\Point2IMG\Taiwan/0715_512/"
+# checkpoints_path = "D:/image-segmentation-keras/0729_Morph_256/CheckPoints/_0729_TW_All_1m_Morph_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
+# Model_Path = "D:/image-segmentation-keras/0729_Morph_256/Model/_0729_TW_All_1m_Morph_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam.h5"
+# BatchRoute = "D:/image-segmentation-keras/0729_Morph_256/Batch/"
+# motherfolder = "D:\Point2IMG\Taiwan/0729_Morph_256/"
 
-train_images = motherfolder + "UnClipped_Img"
-train_annotations = motherfolder + "UnClipped_Png"
+checkpoints_path = "D:/image-segmentation-keras/0729_Morph_512/CheckPoints/_0729_TW_All_1m_512_Morph_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
+Model_Path = "D:/image-segmentation-keras/0729_Morph_512/Model/_0729_TW_All_1m_512_Morph_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam.h5"
+BatchRoute = "D:/image-segmentation-keras/0729_Morph_512/Batch/"
+motherfolder = "D:\Point2IMG\Taiwan/0729_Morph_512/"
+
+obj = 'All_Morphology/' #'City/' #'Forest/' #'LowVeg/'
+
+train_images = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Train_Img' #motherfolder + "UnClipped_Img"
+train_annotations = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Train_Label'#motherfolder + "UnClipped_Png"
 
 epochs = 400
-batch_size = 9 #24
+batch_size = 9
 
 validate = True
-val_images = motherfolder + "Val_Img"
-val_annotations = motherfolder + "Val_Label"
+val_images = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Val_Img' #motherfolder + "Val_Img"
+val_annotations = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Val_Label' #motherfolder + "Val_Label"
 val_batch_size = batch_size
 
-
-input_height = 256 #256
-input_width = 256 #256
+input_height = 512
+input_width = 512 
 n_classes = 1
 channel_count = 3
 
@@ -166,7 +172,9 @@ default_callback = ModelCheckpoint(filepath=checkpoints_path + ".{epoch:05d}",
 callbacks = [default_callback, history, WandbCallback()] #ReduceLR, 
 #tf.keras.callbacks.TensorBoard(log_dir='.\\0331/logs'),
 auto_resume_checkpoint = False #True #Auto Resume the checkpoint from checkpoints_path
-adam = Adam(lr=0.002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+
+adam = Adam(lr=0.0010, beta_1=0.9, beta_2=0.999, decay=0.0)
+
 ####### Never Change########
 metrics_idx = 'accuracy' # 'Recall' # 'Precision'
 load_weights= None 
@@ -359,7 +367,6 @@ if load_weights is not None and len(load_weights) > 0:
     model.load_weights(load_weights)
 
 initial_epoch = 0
-
 if auto_resume_checkpoint and (checkpoints_path is not None):
     latest_checkpoint = find_latest_checkpoint(checkpoints_path)
     if latest_checkpoint is not None:
@@ -380,38 +387,18 @@ if verify_dataset:
 
 train_img_list, train_seg_list = read_all_imgs(train_images, train_annotations)
 
-###train_gen = random_img_seg_generator(
-###train_gen = random_img_seg_generator_pre_read_multi(
-
 train_gen = random_img_seg_generator_pre_read(
             train_img_list, train_seg_list, batch_size,
             n_classes, input_height, input_width, output_height, output_width,
             do_augment = do_augment, augmentation_name="aug_flip_and_rot")
 
-'''
-train_gen = image_segmentation_generator(
-    train_images, train_annotations,  batch_size,  n_classes,
-    input_height, input_width, output_height, output_width,
-    do_augment=do_augment, augmentation_name=augmentation_name,
-    custom_augmentation=custom_augmentation, other_inputs_paths=other_inputs_paths,
-    preprocessing=preprocessing, read_image_type=read_image_type)'''
-
 if validate:
     val_img_list, val_seg_list = read_all_imgs(val_images, val_annotations)
 
-    ###val_gen = random_img_seg_generator(
-    ###val_gen = random_img_seg_generator_pre_read_multi(
-    
     val_gen = random_img_seg_generator_pre_read(
             val_img_list, val_seg_list, batch_size,
             n_classes, input_height, input_width, output_height, output_width,
             do_augment = do_augment, augmentation_name="aug_flip_and_rot")
-'''
-    val_gen = image_segmentation_generator(
-        val_images, val_annotations,  val_batch_size,
-        n_classes, input_height, input_width, output_height, output_width,
-        other_inputs_paths=other_inputs_paths,
-        preprocessing=preprocessing, read_image_type=read_image_type)'''
 
 if callbacks is None : callbacks = []
 
@@ -426,8 +413,6 @@ else:
               validation_steps=val_steps_per_epoch,
               epochs=epochs, callbacks=callbacks, use_multiprocessing=gen_use_multiprocessing, initial_epoch=initial_epoch)
     model.save(Model_Path)
-
-#history.loss_plot('epoch')
 
 plt.plot(history.history['loss'], label='train loss')
 plt.plot(history.history['val_loss'], label='val loss')
