@@ -324,8 +324,8 @@ def Eval(pred_Bin_MS_Img, filename, inpt_UnClippedLabel):
     Accuracy, Recall, Precision, f1, Accuracy_MS, Recall_MS, Precision_MS, f1_MS, cfm = checkclassification(Labelimg, pred_Bin_MS_Img)
     
     print('Confusion Matrix')
-    print('gg : ' + str(cfm[0, 0]) + ' gng : ' + str(cfm[0, 1]))
-    print('ngg : ' + str(cfm[1, 0]) + ' ngng : ' + str(cfm[1, 1]))
+    print('gg : ' + str(cfm[0, 0]) + ' ngg : ' + str(cfm[1, 0]))
+    print('gng : ' + str(cfm[0, 1]) + ' ngng : ' + str(cfm[1, 1]))
     print(' ')
     print('Without Considering Missing Pixels : ')
     print('Accuracy : ' + str(Accuracy) + ' Precision : ' + str(Precision))

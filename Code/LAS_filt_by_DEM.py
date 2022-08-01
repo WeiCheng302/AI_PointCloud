@@ -50,9 +50,9 @@ def LAS_DEM_Preprocess(lasname, demname, outlasname):
 
 if __name__ == "__main__":
 
-    FolderDEM = 'D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\dem/'
-    inLasFolder = 'E:\project_data/apply\Plane/Raw/'
-    outLasFolder = 'E:\project_data/apply\Plane\DEMfilt/'
+    FolderDEM = 'D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\demDiscuss/'
+    inLasFolder = "E:/project_data/apply/Discussion/ZhiChang/Easy/Raw/"
+    outLasFolder = "E:/project_data/apply/Discussion/ZhiChang/Easy/DEMfilt/"
 
     DEMList = glob.glob(FolderDEM + '*.tif')
     lasnameList = glob.glob(inLasFolder + '*.las')

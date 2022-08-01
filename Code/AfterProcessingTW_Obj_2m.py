@@ -13,19 +13,19 @@ from os.path import basename
 from ARSEMimgTW import ReadImg, CreateImgArray, SetImgValueAll, SavePNG
 from keras_segmentation_mod.predict import predict_from_featImg_binary
 
-motherfolder = "D:\Point2IMG\Taiwan/_Training_Data/Testing/"
-predFolder = "D:\Point2IMG\Taiwan/0706_All/"
+motherfolder = "D:\Point2IMG\Taiwan/_Training_Data/All_2m/"
+predFolder = "D:\Point2IMG\Taiwan/0725_All_2m/"
 
 #checkpoint = "D:/image-segmentation-keras/0707_LowVeg/CheckPoints\_0706_TW_LowVeg_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
-checkpoint = "D:/image-segmentation-keras/0706_All/CheckPoints\_0706_TW_GPU_All_3lyr_MBunet_BCE_Interpolation_demPrepro_RD_Adam"
+checkpoint = "D:/image-segmentation-keras/0725_All_2m/CheckPoints\_0725_TW_All_2m_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
 #checkpoint = "D:/image-segmentation-keras/0707_Forest/CheckPoints\_0706_TW_Forest_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
 
 valList = glob.glob(motherfolder + "Val_Img" + "/*.tif")
 
 fileList = glob.glob("E:\project_data/apply\GroundObject\Testing" + "/*.las") # Testing
-#fileList = glob.glob("E:\project_data/apply\GroundObject\Forest" + "/*.las") # Forest
-#fileList = glob.glob("E:\project_data/apply\GroundObject\LowVeg" + "/*.las") # LowVeg
-#fileList = glob.glob("E:\project_data/apply\GroundObject\City" + "/*.las") # City
+fileList = fileList + glob.glob("E:\project_data/apply\GroundObject\Forest" + "/*.las") # Forest
+fileList = fileList + glob.glob("E:\project_data/apply\GroundObject\LowVeg" + "/*.las") # LowVeg
+fileList = fileList + glob.glob("E:\project_data/apply\GroundObject\City" + "/*.las") # City
 
 inpt_allimg = motherfolder + "All_Img"
 inpt_allLabel = motherfolder + "All_Label"
@@ -82,19 +82,21 @@ def MergeImg(filename, out_predict_folder, out_merge):
 # Remember to modify the net structurt and the activate function before evaluating
 
 def precision_idx(CF_Matrix, dim):
-    #TP, TN, FP, FN
+    #GG, NGG, GNG, NGNG
     if dim == 4:
-        accu = (CF_Matrix[0]+CF_Matrix[1])/CF_Matrix.sum()
-        prec_g = CF_Matrix[0]/(CF_Matrix[0]+CF_Matrix[2])
+        accu = (CF_Matrix[0]+CF_Matrix[3])/CF_Matrix.sum()
+        prec_g = CF_Matrix[0]/(CF_Matrix[0]+CF_Matrix[1])
         #prec_ng = CF_Matrix[3]/(CF_Matrix[1]+CF_Matrix[3])
-        Rec_g = CF_Matrix[0]/(CF_Matrix[0]+CF_Matrix[3])
+        Rec_g = CF_Matrix[0]/(CF_Matrix[0]+CF_Matrix[2])
         #Rec_ng = CF_Matrix[3]/(CF_Matrix[0]+CF_Matrix[3])
         F1_g = str((2 * prec_g * Rec_g) / (prec_g + Rec_g))
         #F1_ng = str((2 * prec_ng * Rec_ng) / (prec_ng + Rec_ng))
         kap_g = str((accu - prec_g)/(1 - prec_g))
         #kap_ng = str((accu - prec_ng)/(1-prec_ng))
     
-        precision_idx = ("Accuracy = " + str(accu) + "\n" 
+        precision_idx = ("GG : " + str(CF_Matrix[0]) + " NGG : " + str(CF_Matrix[1])+ "\n"
+                         "GNG : " + str(CF_Matrix[2]) + " NGNG : " + str(CF_Matrix[3])+ "\n"
+                         "Accuracy = " + str(accu) + "\n" 
                          "Precision_Ground = " + str(prec_g) + "\n" + 
                          #"Precision_NonGround = " + str(prec_ng) + "\n" 
                          "Recall_Ground = " + str(Rec_g) + "\n" + 
@@ -124,13 +126,16 @@ def BackProjection(filename, outImg, ignore_Zero = False):
     Ep, Np, Hp, classification = ARSEMLaz.GetLAZInfo_noInt(laz) 
     imgW, imgH ,xyMaxMin = ARSEMLaz.GetImgProjectionInfo(Ep, Np, Hp) #[Emax, Nmax, Hmax, Emin, Nmin, Hmin]
 
+    imgH = int(imgH/2)
+    imgW = int(imgW/2)
+
     print("Start Caculating ")    
 
-    minImg = ARSEMimg.CreateMinImgTW(Ep, Np, Hp, xyMaxMin[3], xyMaxMin[4], ARSEMimg.CreateImgArray(imgH, imgW, 1, np.float32) + 9999.0)
+    minImg = ARSEMimg.CreateMinImgTW_2m(Ep, Np, Hp, xyMaxMin[3], xyMaxMin[4], ARSEMimg.CreateImgArray(imgH, imgW, 1, np.float32) + 9999.0)
 
     print("Classifying")
-    classification, CF_Matrix, notice = ARSEMLaz.ClassifyPointsTW(Ep, Np, Hp, minImg, classimg, classification, xyMaxMin[3], xyMaxMin[4], thres, sigma)
-    precision_index = precision_idx(CF_Matrix, 4)                 #classimg[0]
+    classification, CF_Matrix, notice = ARSEMLaz.ClassifyPointsTW_2m(Ep, Np, Hp, minImg, classimg, classification, xyMaxMin[3], xyMaxMin[4], thres, sigma)
+    precision_index = precision_idx(CF_Matrix, 4)
 
     if True:
         f = open(motherfolder + "ConfusionMatrix.txt", 'w')
@@ -157,14 +162,18 @@ def BackProjectionConf(filename, outImg, probImg, ignore_Zero = False):
     Ep, Np, Hp, classification = ARSEMLaz.GetLAZInfo_noInt(laz) 
     imgW, imgH ,xyMaxMin = ARSEMLaz.GetImgProjectionInfo(Ep, Np, Hp) #[Emax, Nmax, Hmax, Emin, Nmin, Hmin]
 
+    imgH = int(imgH/2) #if imgH%2 == 0 else int(imgH/2) + 1
+    imgW = int(imgW/2) #if imgW%2 == 0 else int(imgH/2) + 1
+
     print("Start Caculating ")    
 
-    minImg = ARSEMimg.CreateMinImgTW(Ep, Np, Hp, xyMaxMin[3], xyMaxMin[4], ARSEMimg.CreateImgArray(imgH, imgW, 1, np.float32) + 9999.0)
+    minImg = ARSEMimg.CreateMinImgTW_2m(Ep, Np, Hp, xyMaxMin[3], xyMaxMin[4], ARSEMimg.CreateImgArray(imgH, imgW, 1, np.float32) + 9999.0)
 
     print("Classifying")
     #classification, CF_Matrix, notice = ARSEMLaz.ClassifyPointsTW(Ep, Np, Hp, minImg, classimg, classification, xyMaxMin[3], xyMaxMin[4], thres, sigma)
-    classification, probability, CF_Matrix, notice = ARSEMLaz.ClassifyPointsTWConf(Ep, Np, Hp, minImg, classimg, probImg, classification, xyMaxMin[3], xyMaxMin[4], thres, sigma)
+    classification, probability, CF_Matrix, notice = ARSEMLaz.ClassifyPointsTWConf_2m(Ep, Np, Hp, minImg, classimg, probImg, classification, xyMaxMin[3], xyMaxMin[4], thres, sigma)
     precision_index = precision_idx(CF_Matrix, 4)                 #classimg[0]
+    print(precision_index)
 
     if True:
         f = open(motherfolder + "ConfusionMatrix.txt", 'w')
@@ -177,6 +186,9 @@ def BackProjectionConf(filename, outImg, probImg, ignore_Zero = False):
     #ARSEMLaz.WriteLAZ(laz, Ep, Np, Hp, classification, motherfolder + os.path.basename(filename)[0:-4] + "_Backproj_0616.las")
     ARSEMLaz.WriteLAZ_int(laz, Ep, Np, Hp, probability, classification, predFolder + os.path.basename(filename)[0:-4] + "_Backproj.las")
     ARSEMLaz.WriteLAZ_int(laz, Ep[probability >= 73], Np[probability >= 73], Hp[probability >= 73], probability[probability >= 73], classification[probability >= 73], predFolder + os.path.basename(filename)[0:-4] + "_Backproj_Conf73.las")
+    print("  ")
+    print("===================")
+    print("  ")
 
 
 def ToBinaryImg(probImg, thres = 50):
@@ -269,6 +281,7 @@ if __name__ == "__main__":
         if basename(filename)[0:8] not in valList : continue
 
         print(basename(filename)[0:8])
+        if basename(filename)[0:8] not in ['95183019', '94181061', '94193037'] : continue
 
         if basename(filename)[0:8] == '94191036' : continue #Not Readable
         featImg = ARSEMimg.ReadImg(inpt_UnClippedtrain + basename(filename)[0:-4] + '.tif')

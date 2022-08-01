@@ -15,7 +15,7 @@ def waterInfo(name):
 
     return np.array([Ysize, Xsize, x_offset, y_offset])
 
-inp_dem = 'D:\Point2IMG\Taiwan/0623_Hill\DEM/Diff_952030431.tif'
+inp_dem = 'D:\Point2IMG\Taiwan/0725_All_2m/95183019_DiffImh.tif'
 # ref_dem = 'D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\dem/DEMe94181061-0916_NNp2.tif'
 # water = 'D:\Point2IMG\Taiwan\Taiwan_Point_Cloud/103_plane\waterlineTIF_105_110/94181061w.tif'
 
@@ -52,47 +52,47 @@ inp_dem = ARSEMimg.ReadImg(inp_dem)
 
 # ARSEMimg.SaveTiff_1inp('D:\Point2IMG\Taiwan/0523_Plane\DEM/94181061_diff_GT_NW_water01.tif', diff, 0)
 diff = inp_dem
-print(diff.max())
-print(diff.min())
-print(diff.mean())
-print(np.median(diff))
-print(diff.std())
-print(sqrt( (diff * diff).sum() / (diff.shape[0]*diff.shape[1]) ))
+print("Max : " + str(diff.max()))
+print("Min : " + str(diff.min()))
+print("Mean : " + str(diff.mean()))
+print("Median : " + str(np.median(diff)))
+print("Std : " + str(diff.std()))
+print("RMSE : " + str(sqrt( (diff * diff).sum() / (diff.shape[0]*diff.shape[1]) )))
 #print(sqrt(diff * diff).sum()/(water_len))
 
-print('=============')
+# print('=============')
 
-a = len(diff[diff>5])
-diff[diff>5] = 0
-a = a + len(diff[diff<-5])
-diff[diff<-5] = 0
+# a = len(diff[diff>5])
+# diff[diff>5] = 0
+# a = a + len(diff[diff<-5])
+# diff[diff<-5] = 0
 
-#ARSEMimg.SaveTiff_1inp('D:\Point2IMG\Taiwan/0523_Plane\DEM/94181061_diff_GT_water5_M.tif', diff, 0)
-print('=============')
+# #ARSEMimg.SaveTiff_1inp('D:\Point2IMG\Taiwan/0523_Plane\DEM/94181061_diff_GT_water5_M.tif', diff, 0)
+# print('=============')
 
-print(diff.max())
-print(diff.min())
-print(diff[diff!=0].mean())
-print(np.median(diff[diff!=0]))
-print(diff[diff!=0].std())
-print(sqrt( (diff * diff).sum() / (diff.shape[0]*diff.shape[1] - a) ) )
-#print(sqrt(diff * diff).sum()/(water_len))
+# print(diff.max())
+# print(diff.min())
+# print(diff[diff!=0].mean())
+# print(np.median(diff[diff!=0]))
+# print(diff[diff!=0].std())
+# print(sqrt( (diff * diff).sum() / (diff.shape[0]*diff.shape[1] - a) ) )
+# #print(sqrt(diff * diff).sum()/(water_len))
 
-print('=============')
-a = a + len(diff[diff>1])
-diff[diff>1] = 0
-a = a + len(diff[diff>1])
-diff[diff<-1] = 0
-a = a + len(diff[diff>1])
-#ARSEMimg.SaveTiff_1inp('D:\Point2IMG\Taiwan/0523_Plane\DEM/94181061_diff_GT_water2_M.tif', diff, 0)
-print('=============')
-print(diff.max())
-print(diff.min())
-print(diff[diff!=0].mean())
-print(np.median(diff[diff!=0]))
-print(diff[diff!=0].std())
-print(sqrt( (diff * diff).sum() / (diff.shape[0]*diff.shape[1] - a) ))
-print(1 - (a/(diff.shape[0]*diff.shape[1])))
+# print('=============')
+# a = a + len(diff[diff>1])
+# diff[diff>1] = 0
+# a = a + len(diff[diff>1])
+# diff[diff<-1] = 0
+# a = a + len(diff[diff>1])
+# #ARSEMimg.SaveTiff_1inp('D:\Point2IMG\Taiwan/0523_Plane\DEM/94181061_diff_GT_water2_M.tif', diff, 0)
+# print('=============')
+# print(diff.max())
+# print(diff.min())
+# print(diff[diff!=0].mean())
+# print(np.median(diff[diff!=0]))
+# print(diff[diff!=0].std())
+# print(sqrt( (diff * diff).sum() / (diff.shape[0]*diff.shape[1] - a) ))
+# print(1 - (a/(diff.shape[0]*diff.shape[1])))
 #print(sqrt(diff * diff).sum()/(water_len))
 #print((diff * diff).sum()/(diff.shape[0]*diff.shape[1] - water_len))
 
