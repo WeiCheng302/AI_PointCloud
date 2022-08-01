@@ -23,7 +23,7 @@ class LossHistory(Callback):
             self.maxBatchLoss = self.val_loss['batch'][-1]
             self.maxLossEpoch = len(self.losses['epoch'])
 
-        if self.losses['batch'][-1] > self.maxBatchLoss : 
+        if self.val_loss['batch'][-1] > self.maxBatchLoss : 
             
             if len(self.losses['epoch']) < 30 : return
             if self.val_loss['batch'][-1] == None : return
@@ -37,7 +37,7 @@ class LossHistory(Callback):
 
             i = 0
             for bat in val_gen.gi_frame.f_locals['Y']:
-                imageio.imwrite(motherfolder + 'Batch/' + epoc + batc + maxLoss + str(i) + '.png', (bat*255).reshape(256, 256).astype(np.uint8))
+                imageio.imwrite(BatchRoute + epoc + batc + maxLoss + str(i) + '.png', (bat*255).reshape(256, 256).astype(np.uint8))
                 i += 1
 
     def on_train_batch_begin(self, batch, logs={}):
@@ -94,8 +94,9 @@ import six
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
 import keras.backend as backend
+from tensorflow.keras.optimizers import Adam
+
 backend.clear_session()
 
 #GPU Setting
@@ -128,29 +129,29 @@ BinaryCrossEntropy = True
 ignore_zero_class = True
 
 #model = "mobilenet_segnet"
-#model = "mobilenet_segnet_deep"
-model = 'mobilenet_unet'
-#model = 'unet'
-#model = 'resnet50_segnet'
+#model = 'mobilenet_unet'
+model = 'mobilenet_unet_Deep'
 
-checkpoints_path = "D:/image-segmentation-keras/0715_512/CheckPoints/_0715_TW_LowVeg_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam"
-Model_Path = "D:/image-segmentation-keras/0715_512/Model/_0715_TW_LowVeg_3060_3lyr_MBunet_BCE_Interpol_demPre_RD_Adam.h5"
-motherfolder = "D:\Point2IMG\Taiwan/0715_512/"
+checkpoints_path = "D:/image-segmentation-keras/0722_All_MBUNetDeep/CheckPoints/_0722_TW_All_3060_3lyr_MBunet_Deep_BCE_Interpol_demPre_RD_Adam"
+Model_Path = "D:/image-segmentation-keras/0722_All_MBUNetDeep/Model/_0722_TW_All_3060_3lyr_MBunet_Deep_BCE_Interpol_demPre_RD_Adam.h5"
+BatchRoute = "D:/image-segmentation-keras/0722_All_MBUNetDeep/Batch/"
+motherfolder = "D:\Point2IMG\Taiwan/0722_All_MBUNetDeep/"
 
-train_images = motherfolder + "UnClipped_Img"
-train_annotations = motherfolder + "UnClipped_Png"
+obj = 'All/' #'City/' #'Forest/' #'LowVeg/'
 
-epochs = 400
-batch_size = 9 #24
+train_images = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Train_Img' #motherfolder + "UnClipped_Img"
+train_annotations = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Train_Label'#motherfolder + "UnClipped_Png"
+
+epochs = 1000
+batch_size = 24
 
 validate = True
-val_images = motherfolder + "Val_Img"
-val_annotations = motherfolder + "Val_Label"
+val_images = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Val_Img' #motherfolder + "Val_Img"
+val_annotations = "D:/Point2IMG/Taiwan/_Training_Data/" + obj + 'Val_Label' #motherfolder + "Val_Label"
 val_batch_size = batch_size
 
-
-input_height = 256 #256
-input_width = 256 #256
+input_height = 256 
+input_width = 256 
 n_classes = 1
 channel_count = 3
 
@@ -166,7 +167,9 @@ default_callback = ModelCheckpoint(filepath=checkpoints_path + ".{epoch:05d}",
 callbacks = [default_callback, history, WandbCallback()] #ReduceLR, 
 #tf.keras.callbacks.TensorBoard(log_dir='.\\0331/logs'),
 auto_resume_checkpoint = False #True #Auto Resume the checkpoint from checkpoints_path
-adam = Adam(lr=0.002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+
+adam = Adam(lr=0.0015, beta_1=0.9, beta_2=0.999, decay=0.0)
+
 ####### Never Change########
 metrics_idx = 'accuracy' # 'Recall' # 'Precision'
 load_weights= None 
